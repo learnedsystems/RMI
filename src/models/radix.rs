@@ -27,7 +27,8 @@ impl RadixModel {
             (1 << (bits + 1)) - 1
         );
 
-        let common_prefix = common_prefix_size(data);
+
+        let common_prefix =  common_prefix_size(data);
         trace!("Radix layer common prefix: {}", common_prefix);
 
         return RadixModel {

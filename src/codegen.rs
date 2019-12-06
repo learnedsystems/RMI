@@ -137,6 +137,23 @@ macro_rules! model_index_from_output {
     };
 }
 
+pub fn rmi_size(rmi: &[Vec<Box<dyn Model>>], report_last_layer_errors: bool) -> u64 {
+    // compute the RMI size (used in the header, compute here before consuming)
+    let mut num_total_params = 0;
+    for layer in rmi.iter() {
+        let model_on_this_layer_size: usize = layer[0].params().iter().map(|p| p.size()).sum();
+        
+        // assume all models on this layer have the same size
+        num_total_params += model_on_this_layer_size * layer.len();
+    }
+    
+    if report_last_layer_errors {
+        num_total_params += rmi.last().unwrap().len();
+    }
+    
+    return num_total_params as u64 * 8
+}
+
 pub fn generate_code<T: Write>(
     code_output: &mut T,
     data_output: &mut T,
@@ -242,22 +259,7 @@ inline size_t FCLAMP(double inp, double bound) {{
         writeln!(code_output, "  {}", var)?;
     }
 
-    // compute the RMI size (used in the header, compute here before consuming)
-    let model_size_bytes = {
-        let mut num_total_params = 0;
-        for layer in rmi.iter() {
-            let model_on_this_layer_size: usize = layer[0].params().iter().map(|p| p.size()).sum();
-
-            // assume all models on this layer have the same size
-            num_total_params += model_on_this_layer_size * layer.len();
-        }
-
-        if report_last_layer_errors {
-            num_total_params += rmi.last().unwrap().len();
-        }
-        num_total_params as u64 * 8
-    };
-
+    let model_size_bytes = rmi_size(&rmi, report_last_layer_errors);
     info!("Generated model size: {:?}", ByteSize(model_size_bytes));
 
     let mut last_model_output = ModelDataType::Int;
