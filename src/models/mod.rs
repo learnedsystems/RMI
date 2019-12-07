@@ -284,6 +284,17 @@ impl ModelParam {
         }
     }
 
+    /* useful for debugging floating point issues
+    pub fn as_bits(&self) -> u64 {
+        return match self {
+            ModelParam::Int(v) => *v,
+            ModelParam::Float(v) => v.to_bits(),
+            ModelParam::ShortArray(_) => panic!("Cannot treat a short array parameter as a float"),
+            ModelParam::IntArray(_) => panic!("Cannot treat an int array parameter as a float"),
+            ModelParam::FloatArray(_) => panic!("Cannot treat an float array parameter as a float"),
+        };
+    }*/
+
     pub fn as_float(&self) -> f64 {
         match self {
             ModelParam::Int(v) => *v as f64,
