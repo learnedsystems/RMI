@@ -8,12 +8,12 @@ This is a reference implementation of recursive model indexes (RMIs). A prototyp
 
 Like binary search trees, an RMI is a structure to help search through sorted data. Given a sorted array, an RMI is a function that maps a key to an approximate index. This approximate index can be used as a starting point for a linear, exponential, or binary search. The [SOSD benchmark](https://learned.systems/sosd) demonstrates that RMIs can outperform binary search and many other standard approaches as well.
 
-Unlike a binary search tree, an RMI uses machine learning techniques to build this approximation function. The result is normally a small, compact mathematical function that can be evaluated quickly. RMIs are a good tool when you need to search the same sorted data many times. Compared to other structures RMIs:
+Unlike a binary search tree, an RMI uses machine learning techniques to build this approximation function. The result is normally a small, compact mathematical function that can be evaluated quickly. RMIs are a good tool when you need to search the same sorted data many times. Compared to other structures, RMIs:
 
 * (➕) Offer faster lookup times (when properly tuned)
 * (➕) Are generally much smaller than traditional structures like B-Trees or radix trees
 * (➖) Must be trained ahead of time on a dataset
-* (➖) Does not support inserts (without retraining the model)
+* (➖) Do not support inserts (without retraining the model)
 
 Many more details can be found in [the original paper](https://arxiv.org/abs/1712.01208).
 
