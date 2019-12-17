@@ -100,7 +100,7 @@ fn main() {
 
     if let Some(param_grid) = matches.value_of("param-grid").map(|x| x.to_string()) {
         let pg = {
-            let raw_json = fs::read_to_string(param_grid).unwrap();
+            let raw_json = fs::read_to_string(param_grid.clone()).unwrap();
             let mut as_json = json::parse(raw_json.as_str()).unwrap();
             let configs = as_json["configs"].take();
             configs
@@ -111,7 +111,12 @@ fn main() {
             for el in v {
                 let layers = String::from(el["layers"].as_str().unwrap());
                 let branching = el["branching factor"].as_u64().unwrap();
-                to_test.push((layers, branching));
+                let namespace = match el["namespace"].as_str() {
+                    Some(s) => Some(String::from(s)),
+                    None => None
+                };
+                
+                to_test.push((layers, branching, namespace));
             }
 
             trace!("# RMIs to train: {}", to_test.len());
@@ -122,7 +127,7 @@ fn main() {
             
             let mut results = json::JsonValue::new_array();
             
-            for (models, branch_factor) in to_test {
+            for (models, branch_factor, namespace) in to_test {
                 trace!("Training RMI {} with branching factor {}", models, branch_factor);
                 bar.set_message(format!("{} {}", models, branch_factor).as_str());
                 // TODO this copy should not be required
@@ -138,14 +143,25 @@ fn main() {
                     "max error" => trained_model.model_max_error,
                     "max error %" => trained_model.model_max_error as f64 / num_rows as f64 * 100.0,
                     "size binary search" => size_bs,
-                    "size linear search" => size_ls
+                    "size linear search" => size_ls,
+                    "namespace" => namespace.clone()
                 }).unwrap();
+
+                if let Some(nmspc) = namespace {
+                    codegen::output_rmi(
+                        &nmspc,
+                        false,
+                        trained_model,
+                        num_rows,
+                        0).unwrap();
+
+                }
                 
                 bar.inc(1);
             }
             bar.finish();
 
-            let f = File::create("results.json").expect("Could not write results file");
+            let f = File::create(format!("{}_results", param_grid)).expect("Could not write results file");
             let mut bw = BufWriter::new(f);
             results.write(&mut bw).unwrap();
             
@@ -166,8 +182,6 @@ fn main() {
        
         
         let last_layer_errors = matches.is_present("last-layer-errors");
-
-
         let trained_model = train(data, models, branch_factor);
         
         let build_time = SystemTime::now()
@@ -203,33 +217,12 @@ fn main() {
         }
         
         if !matches.is_present("no-code") {
-            let f1 = File::create(format!("{}.cpp", namespace)).expect("Could not write RMI CPP file");
-            let mut bw1 = BufWriter::new(f1);
-            
-            let f2 =
-                File::create(format!("{}_data.h", namespace)).expect("Could not write RMI data file");
-            let mut bw2 = BufWriter::new(f2);
-            
-            let f3 = File::create(format!("{}.h", namespace)).expect("Could not write RMI header file");
-            let mut bw3 = BufWriter::new(f3);
-            
-            let lle = if last_layer_errors {
-                Some(trained_model.last_layer_max_l1s)
-            } else {
-                None
-            };
-
-            codegen::generate_code(
-                &mut bw1,
-                &mut bw2,
-                &mut bw3,
-                namespace,
+            codegen::output_rmi(
+                &namespace,
+                last_layer_errors,
+                trained_model,
                 num_rows,
-                trained_model.rmi,
-                lle,
-                build_time,
-            )
-                .unwrap();
+                build_time).unwrap();
         } else {
             trace!("Skipping code generation due to CLI flag");
         }

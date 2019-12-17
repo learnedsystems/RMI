@@ -11,6 +11,10 @@ use log::*;
 use std::collections::HashSet;
 use std::io::Write;
 use std::str;
+use crate::train::TrainedRMI;
+use std::fs::File;
+use std::io::BufWriter;
+
 
 enum LayerParams {
     Constant(usize, Vec<ModelParam>),
@@ -154,11 +158,11 @@ pub fn rmi_size(rmi: &[Vec<Box<dyn Model>>], report_last_layer_errors: bool) -> 
     return num_total_params as u64 * 8
 }
 
-pub fn generate_code<T: Write>(
+fn generate_code<T: Write>(
     code_output: &mut T,
     data_output: &mut T,
     header_output: &mut T,
-    namespace: String,
+    namespace: &str,
     total_rows: usize,
     rmi: Vec<Vec<Box<dyn Model>>>,
     last_layer_errors: Option<Vec<u64>>,
@@ -358,4 +362,41 @@ inline size_t FCLAMP(double inp, double bound) {{
     writeln!(header_output, "}}")?;
 
     return Result::Ok(());
+}
+
+
+pub fn output_rmi(namespace: &str,
+                  last_layer_errors: bool,
+                  trained_model: TrainedRMI,
+                  num_rows: usize,
+                  build_time: u128) -> Result<(), std::io::Error> {
+    
+    let f1 = File::create(format!("{}.cpp", namespace)).expect("Could not write RMI CPP file");
+    let mut bw1 = BufWriter::new(f1);
+    
+    let f2 =
+        File::create(format!("{}_data.h", namespace)).expect("Could not write RMI data file");
+    let mut bw2 = BufWriter::new(f2);
+    
+    let f3 = File::create(format!("{}.h", namespace)).expect("Could not write RMI header file");
+    let mut bw3 = BufWriter::new(f3);
+    
+    let lle = if last_layer_errors {
+        Some(trained_model.last_layer_max_l1s)
+    } else {
+        None
+    };
+    
+    return generate_code(
+        &mut bw1,
+        &mut bw2,
+        &mut bw3,
+        namespace,
+        num_rows,
+        trained_model.rmi,
+        lle,
+        build_time,
+    );
+        
+    
 }
