@@ -148,7 +148,7 @@ macro_rules! define_iterator_type_skip {
                     }
                 };
                 self.idx += 1;
-                if self.idx % 100 < self.factor { self.idx += self.factor - (self.idx % 100); }
+                if self.idx % self.factor == 0 { self.idx += 1; }
 
                 return Some(itm);
             }

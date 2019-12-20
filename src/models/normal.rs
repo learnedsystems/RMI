@@ -31,12 +31,12 @@ fn ncdf(loc_data: &ModelData, fast: bool) -> (f64, f64, f64) {
     let n = loc_data.len() as f64;
 
     if fast {
-        for (x, y) in loc_data.iter_float_float_skip(33) {
+        for (x, y) in loc_data.iter_float_float_skip(3) {
             mean += x / n;
             scale = f64::max(scale, y);
         }
 
-        for (x, _y) in loc_data.iter_float_float_skip(33) {
+        for (x, _y) in loc_data.iter_float_float_skip(3) {
             stdev += (x - mean).powf(2.0)
         }
     } else {
@@ -64,13 +64,13 @@ fn lncdf(loc_data: &ModelData, fast: bool) -> (f64, f64, f64) {
     let n = loc_data.len() as f64;
 
     if fast {
-        for (x, y) in loc_data.iter_float_float_skip(33) {
+        for (x, y) in loc_data.iter_float_float_skip(3) {
             let lnx = if !f64::is_finite(x.ln()) { 0.0 } else { x.ln() };
             mean += lnx / n;
             scale = f64::max(scale, y);
         }
 
-        for (x, _y) in loc_data.iter_float_float_skip(33) {
+        for (x, _y) in loc_data.iter_float_float_skip(3) {
             let lnx = if !f64::is_finite(x.ln()) { 0.0 } else { x.ln() };
             stdev += (lnx - mean).powf(2.0)
         }
