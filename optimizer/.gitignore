@@ -1,0 +1,6 @@
+*json*
+*.cpp
+bvl.csv
+*.txt
+a.out
+opt/
