@@ -89,6 +89,9 @@ pub fn train(data: ModelData, model_spec: &str, branch_factor: u64, fast_top: bo
             // not at the last layer -- rescale
             tmp_data.scale_targets_to(next_layer_size, num_rows);
 
+            if layer_idx == 0 && fast_top {
+                trace!("Model being trained in fast mode");
+            }
             let model = train_model(model_type.as_str(), &tmp_data, layer_idx == 0 && fast_top);
 
             for (x, y) in model_data.iter_int_int() {
