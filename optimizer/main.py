@@ -55,6 +55,10 @@ def bvl():
 def namespace(layers, bf):
     return sha(f'{layers} {bf}')
 
+def params_to_rmi_config(layers, bf):
+    return { "layers": layers, "branching factor": bf,
+             "namespace": f"nm{namespace(layers, bf)}" }
+
 def build_initial_configs():
     # first, build a grid of the most likely configs
     configs = []
@@ -62,9 +66,7 @@ def build_initial_configs():
         for bot in ANYWHERE_LAYERS:
             for bf in BRANCHING_FACTORS[::3]:
                 layers = f"{top},{bot}"
-                configs.append({"layers": layers,
-                                "branching factor": bf,
-                                "namespace": f"nm{namespace(layers, bf)}"})
+                configs.append(params_to_rmi_config(layers, bf))
 
     # next, build a few tests to see if a speciality layer would help
     for top in SPECIALTY_TOP_LAYERS:
@@ -72,17 +74,13 @@ def build_initial_configs():
             for bot in ANYWHERE_LAYERS:
                 for bf in [64, 128, 256]:
                     layers = f"{top},{bot}"
-                    configs.append({"layers": layers,
-                                    "branching factor": bf,
-                                    "namespace": f"nm{namespace(layers, bf)}"})
+                    configs.append(params_to_rmi_config(layers, bf))
         else:
             # not a histogram
             for bot in ANYWHERE_LAYERS:
                 for bf in BRANCHING_FACTORS[::4]:
                     layers = f"{top},{bot}"
-                    configs.append({"layers": layers,
-                                    "branching factor": bf,
-                                    "namespace": f"nm{namespace(layers, bf)}"})
+                    configs.append(params_to_rmi_config(layers, bf))
     return configs
 
 def build_configs_for_layers(candidate_layers, current_results):
@@ -90,19 +88,14 @@ def build_configs_for_layers(candidate_layers, current_results):
     for candidate in candidate_layers:
         if candidate.startswith("histogram"):
             for bf in [32, 300, 512]:
-                next_configs.append({"layers": candidate,
-                                     "branching factor": bf,
-                                     "namespace": f"nm{namespace(candidate, bf)}"})
-
+                next_configs.append(params_to_rmi_config(candidate, bf))
         else:
             already_known = (current_results
                              [current_results.layers == candidate]
                              ["branching factor"]
                              .to_list())
             for bf in sorted(set(BRANCHING_FACTORS) - set(already_known)):
-                next_configs.append({"layers": candidate,
-                                     "branching factor": bf,
-                                     "namespace": f"nm{namespace(candidate, bf)}"})
+                next_configs.append(params_to_rmi_config(candidate, bf))
     return next_configs
 
 def cache_path(data_path, conf):
@@ -411,18 +404,13 @@ def optimize(data_path):
     for _idx, row in front.iterrows():
         layers = row["layers"]
         bf = row["branching factor"]
-        step4_configs.append({
-            "layers": row["layers"],
-            "branching factor": int(bf * 1.5),
-            "namespace": "nm" + namespace(layers, int(bf * 1.5)),
-            "binary": row["binary"]
-        })
-        step4_configs.append({
-            "layers": row["layers"],
-            "branching factor": int(bf * 0.5),
-            "namespace": "nm" + namespace(layers, int(bf * 0.5)),
-            "binary": row["binary"]
-        })
+        config = params_to_rmi_config(layers, int(bf * 1.5))
+        config["binary"] = row["binary"]
+        step4_configs.append(config)
+
+        config = params_to_rmi_config(layers, int(bf * 0.5))
+        config["binary"] = row["binary"]
+        step4_configs.append(config)
 
     print("Expanding the front, searching", len(step4_configs), "additional models")
     step4_results = parallel_test_rmis(data_path, step4_configs, phase="step4")
@@ -447,4 +435,5 @@ def optimize(data_path):
     os.system("cat out.csv")
     
 
-optimize("/home/ryan/SOSD/data/uniform_sparse_200M_uint64")
+if __name__ == "__main__":
+    optimize("/home/ryan/SOSD/data/uniform_sparse_200M_uint64")

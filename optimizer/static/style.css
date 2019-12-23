@@ -1,0 +1,24 @@
+.tick {
+    font-size: 12pt;
+}
+
+.axis-label {
+    font-size: 12pt;
+    font-weight: bold;
+}
+
+.selector-rect {
+    fill-opacity: 15%;
+    fill: darkblue;
+    stroke: black;
+    stroke-width: 1px;
+    stroke-dasharray: 5 5;
+}
+
+.selector-bound {
+    stroke: black;
+}
+
+.hover-line {
+    stroke: gray;
+}

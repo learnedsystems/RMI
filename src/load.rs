@@ -17,7 +17,10 @@ pub enum DataType {
 }
 
 pub fn load_data(filepath: &str, dt: DataType, downsample: usize) -> (usize, ModelData) {
-    let fd = File::open(filepath).unwrap();
+    let fd = File::open(filepath).expect(
+        &format!("Unable to open data file at {}", filepath)
+    );
+    
     let mut reader = BufReader::new(fd);
 
     let num_items = reader.read_u64::<LittleEndian>().unwrap() as usize;
