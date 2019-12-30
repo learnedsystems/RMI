@@ -106,6 +106,11 @@ fn main() {
         trained_model.model_avg_error as f64,
         trained_model.model_avg_error / num_rows as f64 * 100.0
     );
+
+    info!(
+        "Average model log2 error: {}",
+        trained_model.model_avg_log2_error as f64
+    );
     info!(
         "Max model error on model {}: {} ({}%)",
         trained_model.model_max_error_idx,
@@ -118,7 +123,8 @@ fn main() {
         Some(stats_fp) => {
             let output = object! {
                 "average error" => trained_model.model_avg_error,
-                "max error" => trained_model.model_max_error
+                "max error" => trained_model.model_max_error,
+                "average log2 error" => trained_model.model_avg_log2_error
             };
 
             let f = File::create(stats_fp.to_string()).expect("Could not write stats file");
