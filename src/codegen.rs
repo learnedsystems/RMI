@@ -177,7 +177,8 @@ fn generate_code<T: Write>(
 
     let report_last_layer_errors = last_layer_errors.is_some();
 
-    writeln!(data_output, "namespace {} {{", namespace)?;
+    writeln!(data_output, "namespace {} {{", namespace)?;    
+    
     for lp in layer_params.iter() {
         lp.to_code(data_output)?;
     }
@@ -346,6 +347,13 @@ inline size_t FCLAMP(double inp, double bound) {{
     writeln!(header_output, "#include <cstddef>")?;
     writeln!(header_output, "#include <cstdint>")?;
     writeln!(header_output, "namespace {} {{", namespace)?;
+    
+    if !report_last_layer_errors {
+        writeln!(header_output, "#ifdef EXTERN_RMI_LOOKUP")?;
+        writeln!(header_output, "extern \"C\" uint64_t lookup(uint64_t key);")?;
+        writeln!(header_output, "#endif")?;
+    }
+
     writeln!(
         header_output,
         "const size_t RMI_SIZE = {};",

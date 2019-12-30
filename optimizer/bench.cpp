@@ -34,8 +34,10 @@ int main() {
   {
     auto start = std::chrono::high_resolution_clock::now();
     __attribute__((unused)) volatile uint64_t pos;
+    __attribute__((unused)) volatile uint64_t first_itm;
     for (auto itm : random_keys) {
       pos = {{.}}::lookup(itm);
+      first_itm = data[pos];
     }
     
     auto finish = std::chrono::high_resolution_clock::now();

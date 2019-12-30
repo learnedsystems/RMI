@@ -6,18 +6,7 @@
 // < end copyright >
 use crate::models::*;
 
-fn slr(loc_data: &ModelData) -> (f64, f64) {
-    let data_size = loc_data.len();
-
-    // special case when we have 0 or 1 items
-    if data_size == 0 {
-        return (0.0, 0.0);
-    }
-
-    if data_size == 1 {
-        let (_, y) = loc_data.iter_float_float().next().unwrap();
-        return (y, 0.0);
-    }
+fn slr<T: Iterator<Item = (f64, f64)>>(loc_data: T) -> (f64, f64) {
 
     // compute the covariance of x and y as well as the variance of x in
     // a single pass.
@@ -28,7 +17,8 @@ fn slr(loc_data: &ModelData) -> (f64, f64) {
     let mut n = 0;
     let mut m2 = 0.0;
 
-    for (x, y) in loc_data.iter_float_float() {
+    let mut data_size = 0;
+    for (x, y) in loc_data {
         n += 1;
         let dx = x - mean_x;
         mean_x += dx / f64::from(n);
@@ -37,19 +27,26 @@ fn slr(loc_data: &ModelData) -> (f64, f64) {
 
         let dx2 = x - mean_x;
         m2 += dx * dx2;
+        data_size += 1;
     }
+
+    // special case when we have 0 or 1 items
+    if data_size == 0 {
+        return (0.0, 0.0);
+    }
+
+    if data_size == 1 {
+        return (mean_y, 0.0);
+    }
+
 
     let cov = c / f64::from(n - 1);
     let var = m2 / f64::from(n - 1);
     assert!(var >= 0.0);
 
     if var == 0.0 {
-        // variance is zero. pick the lowest value.
-        let (_x, y) = loc_data
-            .iter_float_float()
-            .min_by(|(y1, _), (y2, _)| y1.partial_cmp(y2).unwrap())
-            .unwrap();
-        return (y, 0.0);
+        // variance is zero. pick the mean (only) value.
+        return (mean_y, 0.0);
     }
 
     let beta: f64 = cov / var;
@@ -58,17 +55,26 @@ fn slr(loc_data: &ModelData) -> (f64, f64) {
     return (alpha, beta);
 }
 
-fn loglinear_slr(data: &ModelData) -> (f64, f64) {
+fn loglinear_slr(data: &ModelData, fast: bool) -> (f64, f64) {
     // log all of the outputs, omit any item that doesn't have a valid log
-    let transformed_data: Vec<(f64, f64)> = data
-        .iter_float_float()
-        .map(|(x, y)| (x, y.ln()))
-        .filter(|(_, y)| y.is_finite())
-        .collect();
+    let transformed_data: Vec<(f64, f64)> = if fast {
+        data
+            .iter_float_float_skip(3)
+            .map(|(x, y)| (x, y.ln()))
+            .filter(|(_, y)| y.is_finite())
+            .collect()
+    } else {
+        data
+            .iter_float_float()
+            .map(|(x, y)| (x, y.ln()))
+            .filter(|(_, y)| y.is_finite())
+            .collect()
+    };
 
     // TODO this currently creates a copy of the data and then calls
     // slr... we can probably do better by moving the log into the slr.
-    return slr(&ModelData::FloatKeyToFloatPos(transformed_data));
+    let new_data = ModelData::FloatKeyToFloatPos(transformed_data);
+    return slr(new_data.iter_float_float());
 }
 
 pub struct LinearModel {
@@ -76,8 +82,12 @@ pub struct LinearModel {
 }
 
 impl LinearModel {
-    pub fn new(data: &ModelData) -> LinearModel {
-        return LinearModel { params: slr(&data) };
+    pub fn new(data: &ModelData, skip: bool) -> LinearModel {
+        if skip {
+            return LinearModel { params: slr(data.iter_float_float_skip(3)) };
+        } else {
+            return LinearModel { params: slr(data.iter_float_float()) };
+        }
     }
 }
 
@@ -159,9 +169,9 @@ fn exp1(inp: f64) -> f64 {
 }
 
 impl LogLinearModel {
-    pub fn new(data: &ModelData) -> LogLinearModel {
+    pub fn new(data: &ModelData, fast: bool) -> LogLinearModel {
         return LogLinearModel {
-            params: loglinear_slr(&data),
+            params: loglinear_slr(&data, fast),
         };
     }
 }

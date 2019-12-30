@@ -70,9 +70,13 @@ fn main() {
              .long("param-grid")
              .value_name("file")
              .help("train the RMIs specified in the JSON file and report their errors"))
+        .arg(Arg::with_name("fast-top")
+              .long("fast-top")
+              .help("train top level models using a downsampled version of the data for speed"))
         .get_matches();
 
     let fp = matches.value_of("input").unwrap();
+    let fast_top = matches.is_present("fast-top");
     let downsample = matches
         .value_of("downsample")
         .map(|x| x.parse::<usize>().unwrap())
@@ -113,8 +117,12 @@ fn main() {
                     Some(s) => Some(String::from(s)),
                     None => None
                 };
+                let bsearch = match el["binary"].as_bool() {
+                    Some(b) => b,
+                    None => false
+                };
                 
-                to_test.push((layers, branching, namespace));
+                to_test.push((layers, branching, namespace, bsearch));
             }
 
             trace!("# RMIs to train: {}", to_test.len());
@@ -125,11 +133,11 @@ fn main() {
             
             let mut results = json::JsonValue::new_array();
             
-            for (models, branch_factor, namespace) in to_test {
+            for (models, branch_factor, namespace, bsearch) in to_test {
                 trace!("Training RMI {} with branching factor {}", models, branch_factor);
                 bar.set_message(format!("{} {}", models, branch_factor).as_str());
                 // TODO this copy should not be required
-                let trained_model = train(data.clone(), &models, branch_factor);
+                let trained_model = train(data.clone(), &models, branch_factor, fast_top);
                 
                 let size_bs = codegen::rmi_size(&trained_model.rmi, true);
                 let size_ls = codegen::rmi_size(&trained_model.rmi, false);
@@ -143,13 +151,14 @@ fn main() {
                     "max error %" => trained_model.model_max_error as f64 / num_rows as f64 * 100.0,
                     "size binary search" => size_bs,
                     "size linear search" => size_ls,
-                    "namespace" => namespace.clone()
+                    "namespace" => namespace.clone(),
+                    "binary" => bsearch
                 }).unwrap();
 
                 if let Some(nmspc) = namespace {
                     codegen::output_rmi(
                         &nmspc,
-                        false,
+                        bsearch,
                         trained_model,
                         num_rows,
                         0).unwrap();
@@ -181,7 +190,7 @@ fn main() {
        
         
         let last_layer_errors = matches.is_present("last-layer-errors");
-        let trained_model = train(data, models, branch_factor);
+        let trained_model = train(data, models, branch_factor, fast_top);
         
         let build_time = SystemTime::now()
             .duration_since(start_time)

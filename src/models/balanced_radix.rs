@@ -41,7 +41,6 @@ fn bradix(data: &ModelData, max_output: u64) -> BalancedRadixModel {
     let mut best_result = None;
     for test_bits in bits..u8::min(bits + 2, 64) {
         let bits_max = (1 << (test_bits + 1)) - 1;
-        assert!(bits_max >= max_output);
 
         let high = BalancedRadixModel {
             params: (common_prefix, test_bits, max_output - 1),

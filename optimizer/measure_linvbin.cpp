@@ -5,19 +5,25 @@
 #include <chrono>
 #include <iostream>
 #include <algorithm>
+#include <math.h>
 
 #define DATA_SIZE 200000000
 
-int linear_search(std::vector<uint64_t>& data, uint64_t start, uint64_t key) {
-  if (data[start] == key) return start;
-  if (data[start] < key) {
+struct KV {
+  uint64_t key;
+  uint64_t value;
+};
+
+int linear_search(std::vector<KV>& data, uint64_t start, uint64_t key) {
+  if (data[start].key == key) return data[start].value;
+  if (data[start].key < key) {
     // forward search
-    while (data[++start] != key);
-    return start;
+    while (data[++start].key != key);
+    return data[start].value;
   } else {
     // backwards search
-    while (data[--start] != key);
-    return start;
+    while (data[--start].key != key);
+    return data[start].value;
   }
 }
 
@@ -25,18 +31,22 @@ int linear_search(std::vector<uint64_t>& data, uint64_t start, uint64_t key) {
 int main() {
   srand(42);
 
-  std::vector<uint64_t> data_pts;
+  std::vector<KV> data_pts;
   std::vector<uint64_t> search_keys;
   
   for (unsigned int i = 0; i < DATA_SIZE; i++) {
-    data_pts.push_back(i);
+    KV pt;
+    pt.key = i;
+    pt.value = rand() % DATA_SIZE;
+    
+    data_pts.push_back(pt);
   }
 
-  for (unsigned int i = 0; i < 50000; i++) {
+  for (unsigned int i = 0; i < 500000; i++) {
     search_keys.push_back(rand() % DATA_SIZE);
   }
 
-  for (unsigned int err = 1; err < DATA_SIZE / 2; err *= 2) {
+  for (unsigned int err = 1; err < DATA_SIZE / 4; err = ceil(err * 1.1)) {
     std::vector<uint64_t> starting_points;
     for (auto key : search_keys) {
       if (key < err) {
@@ -52,7 +62,7 @@ int main() {
       }
     }
 
-    if (err < 5000) {
+    if (err < 2000) {
       auto start = std::chrono::high_resolution_clock::now();
       __attribute__((unused)) volatile uint64_t pos;
       for (unsigned int i = 0; i < search_keys.size(); i++) {
@@ -74,7 +84,9 @@ int main() {
         uint64_t start = (start_at >= err ? start_at - err : 0);
         uint64_t end = (start_at + err > DATA_SIZE ? DATA_SIZE : start_at + err);
 
-        pos = std::binary_search(data_pts.begin() + start, data_pts.begin() + end, key);
+        pos = std::distance(data_pts.begin(),
+                            std::lower_bound(data_pts.begin() + start, data_pts.begin() + end, key,
+                                             [](KV kv, uint64_t key) -> bool { return kv.key < key; }));
       }
       auto finish = std::chrono::high_resolution_clock::now();
       std::cout << "binary," << err << ","

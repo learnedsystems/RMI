@@ -16,14 +16,14 @@ pub struct TrainedRMI {
     pub rmi: Vec<Vec<Box<dyn Model>>>,
 }
 
-fn train_model(model_type: &str, data: &ModelData) -> Box<dyn Model> {
+fn train_model(model_type: &str, data: &ModelData, fast: bool) -> Box<dyn Model> {
     let model: Box<dyn Model> = match model_type {
-        "linear" => Box::new(LinearModel::new(data)),
+        "linear" => Box::new(LinearModel::new(data, fast)),
         "linear_spline" => Box::new(LinearSplineModel::new(data)),
         "cubic" => Box::new(CubicSplineModel::new(data)),
-        "loglinear" => Box::new(LogLinearModel::new(data)),
-        "normal" => Box::new(NormalModel::new(data)),
-        "lognormal" => Box::new(LogNormalModel::new(data)),
+        "loglinear" => Box::new(LogLinearModel::new(data, fast)),
+        "normal" => Box::new(NormalModel::new(data, fast)),
+        "lognormal" => Box::new(LogNormalModel::new(data, fast)),
         "radix" => Box::new(RadixModel::new(data)),
         "bradix" => Box::new(BalancedRadixModel::new(data)),
         "histogram" => Box::new(EquidepthHistogramModel::new(data)),
@@ -40,7 +40,7 @@ fn validate(model_spec: &[String]) {
     let empty_data = ModelData::empty();
 
     for (idx, model) in model_spec.iter().enumerate() {
-        let restriction = train_model(model, &empty_data).restriction();
+        let restriction = train_model(model, &empty_data, false).restriction();
 
         match restriction {
             ModelRestriction::None => {}
@@ -63,7 +63,7 @@ fn validate(model_spec: &[String]) {
     }
 }
 
-pub fn train(data: ModelData, model_spec: &str, branch_factor: u64) -> TrainedRMI {
+pub fn train(data: ModelData, model_spec: &str, branch_factor: u64, fast_top: bool) -> TrainedRMI {
     let (model_list, last_model): (Vec<String>, String) = {
         let mut all_models: Vec<String> = model_spec.split(',').map(String::from).collect();
         validate(&all_models);
@@ -76,7 +76,7 @@ pub fn train(data: ModelData, model_spec: &str, branch_factor: u64) -> TrainedRM
     let num_rows = data_partitions[0].len();
 
     let mut current_model_count = 1;
-    for model_type in model_list {
+    for (layer_idx, model_type) in model_list.into_iter().enumerate() {
         info!("Training {} model layer", model_type);
         // data_partition contains all of our data partitioned into groups
         // based on the previous RMI layer's output
@@ -90,7 +90,10 @@ pub fn train(data: ModelData, model_spec: &str, branch_factor: u64) -> TrainedRM
             // not at the last layer -- rescale
             tmp_data.scale_targets_to(next_layer_size, num_rows);
 
-            let model = train_model(model_type.as_str(), &tmp_data);
+            if layer_idx == 0 && fast_top {
+                trace!("Model being trained in fast mode");
+            }
+            let model = train_model(model_type.as_str(), &tmp_data, layer_idx == 0 && fast_top);
 
             for (x, y) in model_data.iter_int_int() {
                 let model_pred = model.predict_to_int(x.into());
@@ -122,7 +125,7 @@ pub fn train(data: ModelData, model_spec: &str, branch_factor: u64) -> TrainedRM
 
     let mut n = 1;
     for (midx, model_data) in data_partitions.into_iter().enumerate() {
-        let last_model = train_model(last_model.as_str(), &model_data);
+        let last_model = train_model(last_model.as_str(), &model_data, false);
         let mut max_error = 0;
         for (idx, (x, y)) in model_data.iter_int_int().enumerate() {
             let pred = last_model.predict_to_int(x.into());

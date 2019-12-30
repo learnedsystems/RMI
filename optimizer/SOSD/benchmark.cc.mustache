@@ -1,0 +1,93 @@
+#include "benchmark.h"
+#include "util.h"
+#include "utils/cxxopts.hpp"
+
+#include "competitors/rmi_search.h"
+
+using namespace std;
+
+
+#define NAME2(a, b)         NAME2_HIDDEN(a,b)
+#define NAME2_HIDDEN(a, b)  a ## b
+
+#define NAME3(a, b, c)         NAME3_HIDDEN(a,b,c)
+#define NAME3_HIDDEN(a, b, c)  a ## b ## c
+
+#define NAME5(a, b, c, d, e)         NAME5_HIDDEN(a,b,c,d,e)
+#define NAME5_HIDDEN(a, b, c, d, e)  a ## b ## c ## d ## e
+
+#define run_rmi_linear(dtype, name, suffix)  if (filename.find("/" #name "_" #dtype) != std::string::npos) { benchmark.Run<RMI_L<NAME2(dtype, _t), NAME5(name, _, dtype, _, suffix)::BUILD_TIME_NS, NAME5(name, _, dtype, _,suffix)::RMI_SIZE, NAME5(name, _, dtype, _,suffix)::NAME, NAME5(name, _, dtype, _, suffix)::lookup>>(); }
+
+#define run_rmi_binary(dtype, name, suffix)  if (filename.find("/" #name "_" #dtype) != std::string::npos) { benchmark.Run<RMI_B<NAME2(dtype, _t), NAME5(name, _, dtype, _, suffix)::BUILD_TIME_NS, NAME5(name, _, dtype, _, suffix)::RMI_SIZE, NAME5(name, _, dtype, _,suffix)::NAME, NAME5(name, _, dtype, _, suffix)::lookup>>(); }
+
+int main(int argc, char* argv[]) {
+  cxxopts::Options options("benchmark", "Searching on sorted data benchmark");
+  options.positional_help("<data> <lookups>");
+  options.add_options()
+      ("data", "Data file with keys", cxxopts::value<std::string>())
+      ("lookups", "Lookup key (query) file", cxxopts::value<std::string>())
+      ("help", "Displays help")
+      ("r,repeats",
+       "Number of repeats",
+       cxxopts::value<int>()->default_value("1"))
+      ("p,perf", "Track performance counters")
+      ("b,build", "Only measure and report build times")
+      ("histogram", "Measure each lookup and output histogram data")
+      ("positional",
+       "extra positional arguments",
+       cxxopts::value<std::vector<std::string>>());
+
+  options.parse_positional({"data", "lookups", "positional"});
+
+  const auto result = options.parse(argc, argv);
+
+  if (result.count("help")) {
+    std::cout << options.help({}) << "\n";
+    exit(0);
+  }
+
+  const size_t num_repeats = result["repeats"].as<int>();
+  cout << "Repeating lookup code " << num_repeats << " time(s)." << endl;
+
+  const bool perf = result.count("perf");
+  const bool build = result.count("build");
+  const bool histogram = result.count("histogram");
+  const std::string filename = result["data"].as<std::string>();
+  const std::string lookups = result["lookups"].as<std::string>();
+
+  const DataType type = util::resolve_type(filename);
+
+  if (lookups.find("lookups")==std::string::npos) {
+    cerr
+        << "Warning: lookups file seems misnamed. Did you specify the right one?\n";
+  }
+
+  // Pin main thread to core 0.
+  util::set_cpu_affinity(0);
+
+  switch (type) {
+    case DataType::UINT32: {
+      break;
+    }
+    case DataType::UINT64: {
+      // Create benchmark.
+      sosd::Benchmark<uint64_t>
+          benchmark(filename, lookups, num_repeats, perf, build, histogram);
+
+      
+      // RMIs
+      {{#candidates}}
+      {{#binary}}
+      benchmark.Run<RMI_B<uint64_t, 0, 0, {{namespace}}::NAME, {{namespace}}::lookup>>();
+      {{/binary}}
+      {{^binary}}
+      benchmark.Run<RMI_L<uint64_t, 0, 0, {{namespace}}::NAME, {{namespace}}::lookup>>();
+      {{/binary}}
+      {{/candidates}}
+
+      break;
+    }
+  }
+
+  return 0;
+}
