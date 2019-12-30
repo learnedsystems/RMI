@@ -44,7 +44,7 @@ impl LinearSplineModel {
 impl Model for LinearSplineModel {
     fn predict_to_float(&self, inp: ModelInput) -> f64 {
         let (alpha, beta) = self.params;
-        return alpha + beta * inp.as_float();
+        return beta.mul_add(inp.as_float(), alpha);
     }
 
     fn input_type(&self) -> ModelDataType {

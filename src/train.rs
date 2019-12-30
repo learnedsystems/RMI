@@ -9,6 +9,7 @@ use log::*;
 
 pub struct TrainedRMI {
     pub model_avg_error: f64,
+    pub model_avg_log2_error: f64,
     pub model_max_error: u64,
     pub model_max_error_idx: usize,
     pub last_layer_max_l1s: Vec<u64>,
@@ -114,7 +115,8 @@ pub fn train(data: ModelData, model_spec: &str, branch_factor: u64) -> TrainedRM
     info!("Training last level {} model", last_model);
     let mut last_layer = Vec::new();
     let mut last_layer_max_l1s: Vec<u64> = Vec::new();
-    let mut model_avg_error = 0.0;
+    let mut model_avg_error: f64 = 0.0;
+    let mut model_avg_log2_error: f64 = 0.0;
     let mut model_max_error = 0;
     let mut model_max_error_idx = 0;
 
@@ -135,7 +137,9 @@ but an error of {} was observed on input {} at index {}. Prediction: {} Actual: 
             }
 
             max_error = u64::max(max_error, err);
-            model_avg_error += ((max_error as f32) - model_avg_error) / (n as f32);
+            model_avg_error += ((max_error as f64) - model_avg_error) / (n as f64);
+            let log2_error = ((2 * max_error + 2) as f64).log2();
+            model_avg_log2_error += (log2_error - model_avg_log2_error) / (n as f64);
             n += 1;
         }
         if max_error > model_max_error {
@@ -149,7 +153,8 @@ but an error of {} was observed on input {} at index {}. Prediction: {} Actual: 
     rmi.push(last_layer);
 
     return TrainedRMI {
-        model_avg_error: model_avg_error as f64,
+        model_avg_error,
+        model_avg_log2_error,
         model_max_error,
         model_max_error_idx,
         last_layer_max_l1s,

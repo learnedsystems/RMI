@@ -96,8 +96,6 @@ fn main() {
         .unwrap_or(std::u128::MAX);
     info!("Data read time: {} ms", load_time / 1_000_000);
 
-
-
     if let Some(param_grid) = matches.value_of("param-grid").map(|x| x.to_string()) {
         let pg = {
             let raw_json = fs::read_to_string(param_grid.clone()).unwrap();
@@ -140,6 +138,7 @@ fn main() {
                     "branching factor" => branch_factor,
                     "average error" => trained_model.model_avg_error as f64,
                     "average error %" => trained_model.model_max_error as f64 / num_rows as f64 * 100.0,
+                    "average log2 error" => trained_model.model_avg_log2_error,
                     "max error" => trained_model.model_max_error,
                     "max error %" => trained_model.model_max_error as f64 / num_rows as f64 * 100.0,
                     "size binary search" => size_bs,
@@ -196,6 +195,10 @@ fn main() {
             trained_model.model_avg_error / num_rows as f64 * 100.0
         );
         info!(
+            "Average model log2 error: {}",
+            trained_model.model_avg_log2_error
+        );
+        info!(
             "Max model error on model {}: {} ({}%)",
             trained_model.model_max_error_idx,
             trained_model.model_max_error,
@@ -207,6 +210,7 @@ fn main() {
             Some(stats_fp) => {
                 let output = object! {
                     "average error" => trained_model.model_avg_error,
+                    "average log2 error" => trained_model.model_avg_log2_error,
                     "max error" => trained_model.model_max_error
                 };
                 

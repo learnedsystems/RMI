@@ -136,8 +136,13 @@ impl Model for CubicSplineModel {
         let (a, b, c, d) = self.params;
         let val = inp.as_float();
 
-        //return a*x.powf(3.0) + b * x.powf(2.0) + c*x + d;
-        return (((a * val + b) * val + c) * val) + d;
+        // use mul_add here so we get the same FMA behavior as we do
+        // in C.
+        let v1 = a.mul_add(val, b);
+        let v2 = v1.mul_add(val, c);
+        let v3 = v2.mul_add(val, d);
+        return v3;
+
     }
 
     fn input_type(&self) -> ModelDataType {
