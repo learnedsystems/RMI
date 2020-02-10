@@ -23,31 +23,20 @@ fn phi(x: f64) -> f64 {
     return 1.0 / (1.0 + exp1(-1.65451 * x));
 }
 
-fn ncdf(loc_data: &ModelData, fast: bool) -> (f64, f64, f64) {
+fn ncdf(loc_data: &ModelData) -> (f64, f64, f64) {
     let mut scale = -f64::INFINITY;
     let mut mean = 0.0;
     let mut stdev = 0.0;
 
     let n = loc_data.len() as f64;
 
-    if fast {
-        for (x, y) in loc_data.iter_float_float_skip(3) {
-            mean += x / n;
-            scale = f64::max(scale, y);
-        }
-
-        for (x, _y) in loc_data.iter_float_float_skip(3) {
-            stdev += (x - mean).powf(2.0)
-        }
-    } else {
-        for (x, y) in loc_data.iter_float_float() {
-            mean += x / n;
-            scale = f64::max(scale, y);
-        }
-
-        for (x, _y) in loc_data.iter_float_float() {
-            stdev += (x - mean).powf(2.0)
-        }
+    for (x, y) in loc_data.iter_float_float() {
+        mean += x / n;
+        scale = f64::max(scale, y);
+    }
+    
+    for (x, _y) in loc_data.iter_float_float() {
+        stdev += (x - mean).powf(2.0)
     }
 
     stdev /= n;
@@ -56,36 +45,23 @@ fn ncdf(loc_data: &ModelData, fast: bool) -> (f64, f64, f64) {
     return (mean, stdev, scale);
 }
 
-fn lncdf(loc_data: &ModelData, fast: bool) -> (f64, f64, f64) {
+fn lncdf(loc_data: &ModelData) -> (f64, f64, f64) {
     let mut scale = -f64::INFINITY;
     let mut mean = 0.0;
     let mut stdev = 0.0;
 
     let n = loc_data.len() as f64;
-
-    if fast {
-        for (x, y) in loc_data.iter_float_float_skip(3) {
-            let lnx = if !f64::is_finite(x.ln()) { 0.0 } else { x.ln() };
-            mean += lnx / n;
-            scale = f64::max(scale, y);
-        }
-
-        for (x, _y) in loc_data.iter_float_float_skip(3) {
-            let lnx = if !f64::is_finite(x.ln()) { 0.0 } else { x.ln() };
-            stdev += (lnx - mean).powf(2.0)
-        }
-    } else {
-        for (x, y) in loc_data.iter_float_float() {
-            let lnx = if !f64::is_finite(x.ln()) { 0.0 } else { x.ln() };
-            mean += lnx / n;
-            scale = f64::max(scale, y);
-        }
-
-        for (x, _y) in loc_data.iter_float_float() {
-            let lnx = if !f64::is_finite(x.ln()) { 0.0 } else { x.ln() };
-            stdev += (lnx - mean).powf(2.0)
-        }
+    for (x, y) in loc_data.iter_float_float() {
+        let lnx = if !f64::is_finite(x.ln()) { 0.0 } else { x.ln() };
+        mean += lnx / n;
+        scale = f64::max(scale, y);
     }
+
+    for (x, _y) in loc_data.iter_float_float() {
+        let lnx = if !f64::is_finite(x.ln()) { 0.0 } else { x.ln() };
+        stdev += (lnx - mean).powf(2.0)
+    }
+
 
     stdev /= n;
     stdev = stdev.sqrt();
@@ -98,8 +74,8 @@ pub struct NormalModel {
 }
 
 impl NormalModel {
-    pub fn new(data: &ModelData, fast: bool) -> NormalModel {
-        return NormalModel { params: ncdf(data, fast) };
+    pub fn new(data: &ModelData) -> NormalModel {
+        return NormalModel { params: ncdf(data) };
     }
 }
 
@@ -170,9 +146,9 @@ pub struct LogNormalModel {
 }
 
 impl LogNormalModel {
-    pub fn new(data: &ModelData, fast: bool) -> LogNormalModel {
+    pub fn new(data: &ModelData) -> LogNormalModel {
         return LogNormalModel {
-            params: lncdf(data, fast),
+            params: lncdf(data),
         };
     }
 }

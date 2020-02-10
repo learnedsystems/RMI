@@ -55,21 +55,13 @@ fn slr<T: Iterator<Item = (f64, f64)>>(loc_data: T) -> (f64, f64) {
     return (alpha, beta);
 }
 
-fn loglinear_slr(data: &ModelData, fast: bool) -> (f64, f64) {
+fn loglinear_slr(data: &ModelData) -> (f64, f64) {
     // log all of the outputs, omit any item that doesn't have a valid log
-    let transformed_data: Vec<(f64, f64)> = if fast {
-        data
-            .iter_float_float_skip(3)
-            .map(|(x, y)| (x, y.ln()))
-            .filter(|(_, y)| y.is_finite())
-            .collect()
-    } else {
-        data
-            .iter_float_float()
-            .map(|(x, y)| (x, y.ln()))
-            .filter(|(_, y)| y.is_finite())
-            .collect()
-    };
+    let transformed_data: Vec<(f64, f64)> = data
+        .iter_float_float()
+        .map(|(x, y)| (x, y.ln()))
+        .filter(|(_, y)| y.is_finite())
+        .collect();
 
     // TODO this currently creates a copy of the data and then calls
     // slr... we can probably do better by moving the log into the slr.
@@ -82,12 +74,8 @@ pub struct LinearModel {
 }
 
 impl LinearModel {
-    pub fn new(data: &ModelData, skip: bool) -> LinearModel {
-        if skip {
-            return LinearModel { params: slr(data.iter_float_float_skip(3)) };
-        } else {
-            return LinearModel { params: slr(data.iter_float_float()) };
-        }
+    pub fn new(data: &ModelData) -> LinearModel {
+        return LinearModel { params: slr(data.iter_float_float()) };
     }
 }
 
@@ -169,9 +157,9 @@ fn exp1(inp: f64) -> f64 {
 }
 
 impl LogLinearModel {
-    pub fn new(data: &ModelData, fast: bool) -> LogLinearModel {
+    pub fn new(data: &ModelData) -> LogLinearModel {
         return LogLinearModel {
-            params: loglinear_slr(&data, fast),
+            params: loglinear_slr(&data),
         };
     }
 }

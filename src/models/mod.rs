@@ -112,55 +112,9 @@ macro_rules! define_iterator_type {
     };
 }
 
-macro_rules! define_iterator_type_skip {
-    ($name: tt, $type1: ty, $type2: ty) => {
-        pub struct $name<'a> {
-            data: &'a ModelData,
-            idx: usize,
-            factor: usize
-        }
-
-        impl<'a> $name<'a> {
-            fn new(data: &'a ModelData, factor: usize) -> $name<'a> {
-                assert!(factor < 100);
-                return $name { data, idx: 0 , factor};
-            }
-        }
-
-        impl<'a> Iterator for $name<'a> {
-            type Item = ($type1, $type2);
-
-            fn next(&mut self) -> Option<Self::Item> {
-                if self.idx >= self.data.len() {
-                    return None;
-                }
-
-                let itm = match self.data {
-                    ModelData::FloatKeyToFloatPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2)
-                    }
-                    ModelData::FloatKeyToIntPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2)
-                    }
-                    ModelData::IntKeyToIntPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2)
-                    }
-                    ModelData::IntKeyToFloatPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2)
-                    }
-                };
-                self.idx += 1;
-                if self.idx % self.factor == 0 { self.idx += 1; }
-
-                return Some(itm);
-            }
-        }
-    };
-}
 
 define_iterator_type!(ModelDataFFIterator, f64, f64);
 define_iterator_type!(ModelDataIIIterator, u64, u64);
-define_iterator_type_skip!(ModelDataFFIteratorSkip, f64, f64);
 //define_iterator_type_skip!(ModelDataIIIteratorSkip, u64, u64);
 //define_iterator_type!(ModelDataFIIterator, f64, u64);
 //define_iterator_type!(ModelDataIFIterator, u64, f64);
@@ -173,9 +127,6 @@ impl ModelData {
         return ModelDataIIIterator::new(&self);
     }
 
-    pub fn iter_float_float_skip(&self, factor: usize) -> ModelDataFFIteratorSkip {
-        return ModelDataFFIteratorSkip::new(&self, factor);
-    }
     /*pub fn iter_int_int_skip(&self, factor: usize) -> ModelDataIIIteratorSkip {
         return ModelDataIIIteratorSkip::new(&self, factor);
     }*/
