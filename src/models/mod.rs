@@ -30,6 +30,8 @@ pub use radix::RadixModel;
 pub use stdlib::StdFunctions;
 
 use std::collections::HashSet;
+use std::io::Write;
+use byteorder::{WriteBytesExt, LittleEndian};
 
 #[derive(Clone)]
 pub enum ModelData {
@@ -350,6 +352,42 @@ impl ModelParam {
         };
     }*/
 
+    pub fn is_same_type(&self, other: &ModelParam) -> bool {
+        return std::mem::discriminant(self) == std::mem::discriminant(other);
+    }
+
+    pub fn write_to<T: Write>(&self, target: &mut T) -> Result<(), std::io::Error> {
+        match self {
+            ModelParam::Int(v) => target.write_u64::<LittleEndian>(*v),
+            ModelParam::Float(v) => target.write_f64::<LittleEndian>(*v),
+            ModelParam::ShortArray(arr) => {
+                for v in arr {
+                    target.write_u16::<LittleEndian>(*v)?;
+                }
+
+                Ok(())
+            },
+            
+            ModelParam::IntArray(arr) => {
+                for v in arr {
+                    target.write_u64::<LittleEndian>(*v)?;
+                }
+
+                Ok(())
+            }
+
+            ModelParam::FloatArray(arr) => {
+                for v in arr {
+                    target.write_f64::<LittleEndian>(*v)?;
+                }
+
+                Ok(())
+
+            }
+
+        }
+    }
+    
     pub fn as_float(&self) -> f64 {
         match self {
             ModelParam::Int(v) => *v as f64,
@@ -357,6 +395,16 @@ impl ModelParam {
             ModelParam::ShortArray(_) => panic!("Cannot treat a short array parameter as a float"),
             ModelParam::IntArray(_) => panic!("Cannot treat an int array parameter as a float"),
             ModelParam::FloatArray(_) => panic!("Cannot treat an float array parameter as a float"),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            ModelParam::Int(_) => 1,
+            ModelParam::Float(_) => 1,
+            ModelParam::ShortArray(p) => p.len(),
+            ModelParam::IntArray(p) => p.len(),
+            ModelParam::FloatArray(p) => p.len()
         }
     }
 }

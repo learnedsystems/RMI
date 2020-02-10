@@ -71,8 +71,13 @@ fn main() {
              .value_name("file")
              .help("train the RMIs specified in the JSON file and report their errors"))
         .arg(Arg::with_name("fast-top")
-              .long("fast-top")
-              .help("train top level models using a downsampled version of the data for speed"))
+             .long("fast-top")
+             .help("train top level models using a downsampled version of the data for speed"))
+        .arg(Arg::with_name("data-path")
+             .long("data-path")
+             .short("d")
+             .value_name("dir")
+             .help("exports parameters to files in this directoyr instead of embedding them"))
         .get_matches();
 
     let fp = matches.value_of("input").unwrap();
@@ -81,6 +86,8 @@ fn main() {
         .value_of("downsample")
         .map(|x| x.parse::<usize>().unwrap())
         .unwrap_or(1);
+
+    let data_dir = matches.value_of("data-path");
     
     if matches.value_of("namespace").is_some() && matches.value_of("param-grid").is_some() {
         panic!("Can only specify one of namespace or param-grid");
@@ -161,7 +168,8 @@ fn main() {
                         bsearch,
                         trained_model,
                         num_rows,
-                        0).unwrap();
+                        0,
+                        data_dir).unwrap();
 
                 }
                 
@@ -235,7 +243,8 @@ fn main() {
                 last_layer_errors,
                 trained_model,
                 num_rows,
-                build_time).unwrap();
+                build_time,
+                data_dir).unwrap();
         } else {
             trace!("Skipping code generation due to CLI flag");
         }
