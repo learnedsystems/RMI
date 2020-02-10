@@ -143,19 +143,19 @@ macro_rules! model_index_from_output {
 
 pub fn rmi_size(rmi: &[Vec<Box<dyn Model>>], report_last_layer_errors: bool) -> u64 {
     // compute the RMI size (used in the header, compute here before consuming)
-    let mut num_total_params = 0;
+    let mut num_total_bytes = 0;
     for layer in rmi.iter() {
         let model_on_this_layer_size: usize = layer[0].params().iter().map(|p| p.size()).sum();
         
         // assume all models on this layer have the same size
-        num_total_params += model_on_this_layer_size * layer.len();
+        num_total_bytes += model_on_this_layer_size * layer.len();
     }
-    
+
     if report_last_layer_errors {
-        num_total_params += rmi.last().unwrap().len();
+        num_total_bytes += rmi.last().unwrap().len() * 8;
     }
     
-    return num_total_params as u64 * 8
+    return num_total_bytes as u64;
 }
 
 fn generate_code<T: Write>(
