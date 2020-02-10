@@ -1,7 +1,0 @@
-*json*
-*.cpp
-bvl.csv
-*.txt
-a.out
-opt/
-SOSD/benchmark.cc
