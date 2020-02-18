@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <title>Optimizer</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+    
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.0/css/all.css" integrity="sha384-lZN37f5QGtY3VHgisS14W3ExzMWZxybE1SJSEsQp9S+oqd12jhcu+A56Ebc1zFSJ" crossorigin="anonymous">
+
+    <link rel="stylesheet" type="text/css" href="bootstrap.min.css">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="jquery.js"></script>
+    <script src="bootstrap.min.js"></script>
+    <script src="d3.js"></script>
+    <script src="/optimizer.js"></script>
+  </head>
+
+  <body>
+    <br/>
+    <div id="content">
+      <div class="container">
+        <div class="row align-items-center justify-content-around">
+          <div class="col-8">
+            <div id="step1-plot"></div>
+          </div>
+          <div class="col-4">
+            <div class="card">
+              <div class="card-body">
+                <p class="lead">Step 1</p>
+                <p>Doing a complete grid search of every RMI configuration would be
+                  extremely costly. To avoid this, we first sample 70 RMIs from the
+                  grid and measure
+                  <ul>
+                    <li> their size, </li>
+                    <li> their inference time,</li>
+                    <li> and their error.</li>
+                  </ul>
+                </p>
+                <p>
+                  We model search time as:
+                  <center><code>inference + f(error)</code></center>
+                  ... where <code>f</code> is some monotonic function.
+                </p>
+
+                <p>Thus, we eliminate any model that falls outside of the (size, inference, error)
+                  Pareto front. The points on the front are yellow, and the points off the front are gray.
+                </p>
+
+                <button type="button" class="btn btn-primary">Next</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row mt-4">
+          <div class="col">
+            <div class="card">
+              <div class="card-body">
+                <p>Of <span id="step1-tested"></span>
+                  indexes tested, <span id="step1-onfront"></span>
+                  were on the Pareto front in terms of size, inference time, and error.
+                  The other <span id="step1-offfront"></span> were not on the front.</p>
+                <p>We'll continue the search by expanding on these models: <span id="step1-models"></span>.</p>
+                <p>The following models will not be searched further: <span id="step1-elimmodels"></span>.</p>
+                <button class="btn btn-light" type="button"
+                        data-toggle="collapse" data-target="#step1-table">
+                  Details
+                </button>
+                <div class="collapse mt-3" id="step1-table">
+                  <table class="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Layers</th>
+                        <th>Branching factor</th>
+                        <th>Size</th>
+                        <th>Inference</th>
+                        <th>Max error</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-step1">
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <br/><br/>
+      <! -- Step 2 -->
+      <div class="container">
+        <div class="row align-items-center justify-content-around">
+          <div class="col-8">
+            <div id="step2-plot"></div>
+          </div>
+          <div class="col-4">
+            <div class="card">
+              <div class="card-body">
+                <p class="lead">Step 2</p>
+                <p>In step 2, we investigate more indexes based on the models determined to be Pareto
+                  efficient in step 1. Again, since measuring the search latency is expensive, we measure: 
+                  <ul>
+                    <li> their size, </li>
+                    <li> their inference time,</li>
+                    <li> and their error.</li>
+                  </ul>
+                </p>
+
+                <p>We combine the indexes explored in step 2 with the ones explored in step 1.
+                  Like before, we eliminate any model that falls outside of the (size, inference, error)
+                  Pareto front. The points on the front are green, and the points off the front are gray.
+                </p>
+
+                <button type="button" class="btn btn-primary">Next</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row mt-4">
+          <div class="col">
+            <div class="card">
+              <div class="card-body">
+                <p>Of <span id="step2-tested"></span>
+                  indexes tested, <span id="step2-onfront"></span>
+                  were on the Pareto front in terms of size, inference time, and error.
+                  The other <span id="step2-offfront"></span> were not on the front.</p>
+                <p>We'll continue the search by measuring the actual lookup latency of the
+                  Pareto efficient indexes.</p>
+                <button class="btn btn-light" type="button"
+                        data-toggle="collapse" data-target="#step2-table">
+                  Details
+                </button>
+                <div class="collapse mt-3" id="step2-table">
+                  <table class="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Layers</th>
+                        <th>Branching factor</th>
+                        <th>Size</th>
+                        <th>Inference</th>
+                        <th>Max error</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-step2">
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <br/><br/>
+      <! -- Step 3 -->
+      <div class="container">
+        <div class="row align-items-center justify-content-around">
+          <div class="col-8">
+            <div id="step3-plot"></div>
+          </div>
+          <div class="col-4">
+            <div class="card">
+              <div class="card-body">
+                <p class="lead">Step 3</p>
+                <p>In step 3, we use a sample workload to measure the performance of the
+                  Pareto-efficient indexes discovered in step 2. Based on these results,
+                  we form a third Pareto front based on:
+                  <ul>
+                    <li> size, </li>
+                    <li> and lookup latency.</li>
+                  </ul>
+                </p>
+
+                <p>Like before, we eliminate any model that falls outside of the (size, performance)
+                  Pareto front. The points on the front are green, and the points off the front are gray.
+                </p>
+
+                <button type="button" class="btn btn-primary">Next</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row mt-4">
+          <div class="col">
+            <div class="card">
+              <div class="card-body">
+                <p>Of <span id="step3-tested"></span>
+                  indexes tested, <span id="step3-onfront"></span>
+                  were on the Pareto front in terms of size and lookup latency.
+                  The other <span id="step3-offfront"></span> were not on the front.</p>
+                <p>We'll continue the search by expanding around the models that were on the front.</p>
+                <button class="btn btn-light" type="button"
+                        data-toggle="collapse" data-target="#step3-table">
+                  Details
+                </button>
+                <div class="collapse mt-3" id="step3-table">
+                  <table class="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Layers</th>
+                        <th>Branching factor</th>
+                        <th>Size</th>
+                        <th>Latency</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-step3">
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      
+      <br/><br/>
+      <! -- Step 4 -->
+      <div class="container">
+        <div class="row align-items-center justify-content-around">
+          <div class="col-8">
+            <div id="step4-plot"></div>
+          </div>
+          <div class="col-4">
+            <div class="card">
+              <div class="card-body">
+                <p class="lead">Step 4</p>
+                <p>In step 4, we expand our search around the indexes that were on the Pareto front
+                  in step 3.
+                </p>
+
+                <p>Like before, we eliminate any model that falls outside of the (size, performance)
+                  Pareto front. The points on the front are green, and the points off the front are gray.
+                </p>
+
+                <button type="button" class="btn btn-primary">Next</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row mt-4">
+          <div class="col">
+            <div class="card">
+              <div class="card-body">
+                <p>After completing step 4, a total of <span id="step4-tested"></span>
+                  indexes were tested. Of those, <span id="step4-onfront"></span> indexes
+                  were on the Pareto front in terms of size and lookup latency.
+                  The other <span id="step4-offfront"></span> were not on the front.</p>
+                <button class="btn btn-light" type="button"
+                        data-toggle="collapse" data-target="#step4-table">
+                  Details
+                </button>
+                <div class="collapse mt-3" id="step4-table">
+                  <table class="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Layers</th>
+                        <th>Branching factor</th>
+                        <th>Size</th>
+                        <th>Latency</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-step4">
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      
+    </div>
+  </body>
+</html>

@@ -1,56 +1,189 @@
-<html>
+<!doctype html>
+<html lang="en">
   <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
     <title>CDFShop</title>
     <link rel="stylesheet" type="text/css" href="style.css">
+    
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.0/css/all.css" integrity="sha384-lZN37f5QGtY3VHgisS14W3ExzMWZxybE1SJSEsQp9S+oqd12jhcu+A56Ebc1zFSJ" crossorigin="anonymous">
+
+    <link rel="stylesheet" type="text/css" href="bootstrap.min.css">
+    <script src="jquery.js"></script>
+    <script src="bootstrap.min.js"></script>
     <script src="d3.js"></script>
+    <script src="globalLoader.js"></script>
     <script src="cdfgraph.js"></script>
+    <script src="inspector.js"></script>
+    <script src="measure_table.js"></script>
   </head>
   <body>
-    <h1>View CDF</h1>
-    <select id="cdf1-dataset">
-      <option value="osm_cellids_200M_uint64">OSM Cell IDs</option>
-      <option value="books_200M_uint64">Amazon Books</option>
-      <option value="fb_200M_uint64">Facebook Users</option>
-      <option value="lognormal_200M_uint64">Log-Normal (synthetic)</option>
-      <option value="normal_200M_uint64">Normal (synthetic)</option>
-    </select>
-    <div id="cdf-view"></div>
-    <button id="cdf-reset">Reset</button>
-    <br/><br/>
-    <div>
-      <div>
-        RMI layer 1:
-        <select id="rmi1-layer1">
-          <option value="radix">Radix</option>
-          <option value="bradix">Balanced radix</option>
-          <option value="linear">Linear</option>
-          <option value="linear_spline">Linear spline</option>
-          <option value="cubic">Cubic spline</option>
-          <option value="loglinear">Log linear</option>
-          <option value="normal">Normal</option>
-          <option value="lognormal">Log Normal</option>
-          <option value="histogram">Histogram</option>
-        </select>
+    <div id="pareto-tooltip"></div>
+    <div id="global-loader">
+      <h1>Sorry, something is taking longer than expected...</h1>
+      <h2>Hold on a second while we figure it out.</h2>
+      <br/>
+      <img alt="Loading animation" src="colorloader.gif" />
+    </div>
+    <div id="content">
+      <div class="container">
+        <div class="row align-items-center justify-content-around">
+          <div class="col">
+            <h2>CDF Designer</h2>
+          </div>
+          <div class="col-4 text-right">
+            <select class="form-control" id="cdf1-dataset">
+              <option value="osm_cellids_200M_uint64">OSM Cell IDs</option>
+              <option value="books_200M_uint64">Amazon Books</option>
+              <option value="fb_200M_uint64">Facebook Users</option>
+              <option value="lognormal_200M_uint64">Log-Normal (synthetic)</option>
+              <option value="normal_200M_uint64">Normal (synthetic)</option>
+            </select>
+          </div>
+        </div>
+        <div class="mt-4 row align-items-center justify-content-around">
+          <div class="col-8">
+            <div id="cdf-view"></div>
+          </div>
+          <div class="col">
+            <div class="card">
+              <div class="card-body">
+                <div id="info-table-1"></div>
+                <div class="form-group row">
+                  <label for="rmi1-layer1" class="col-5 col-form-label">RMI layer 1:</label>
+                  <div class="col-7">
+                    <select class="form-control" id="rmi1-layer1">
+                      <option value="radix">Radix</option>
+                      <option value="bradix">Balanced radix</option>
+                      <option value="linear">Linear</option>
+                      <option value="linear_spline">Linear spline</option>
+                      <option value="cubic">Cubic spline</option>
+                      <option value="loglinear">Log linear</option>
+                      <option value="normal">Normal</option>
+                      <option value="lognormal">Log Normal</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label for="rmi1-layer2" class="col-5 col-form-label">RMI layer 2:</label>
+                  <div class="col-7">
+                    <select class="form-control" id="rmi1-layer2">
+                      <option value="linear">Linear</option>
+                      <option value="linear_spline">Linear spline</option>
+                      <option value="cubic">Cubic spline</option>
+                      <option value="loglinear">Log linear</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label for="rmi1-bf" class="col-5 col-form-label">Branching factor:</label>
+                  <div class="col-7">
+                    <select class="form-control" id="rmi1-bf">
+                      <option value="1024">1024</option>
+                      <option value="4096">4096</option>
+                      <option value="16284">16284</option>
+                      <option value="65536">65536</option>
+                      <option value="262144">262144</option>
+                      <option value="1048576">1048576</option>
+                      <option value="2097152">2097152</option>
+                    </select>
+                  </div>
+                </div>
+                <button class="btn btn-primary" id="rmi1-save">Save</button>
+                <button class="btn btn-info" id="cdf-reset">Reset zoom</button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div>
-        RMI layer 2:
-        <select id="rmi1-layer2">
-          <option value="linear">Linear</option>
-          <option value="linear_spline">Linear spline</option>
-          <option value="cubic">Cubic spline</option>
-          <option value="loglinear">Log linear</option>
-        </select>
+      <div class="mt-5 container">
+        <div class="row">
+          <div class="col">
+            <div id="rmi-table"></div>
+          </div>
+        </div>
+        <div class="row align-items-center justify-content-around">
+          <div class="col-9">
+            <div id="pareto-plot"></div>
+          </div>
+          <div class="col-3">
+            <h5>Legend</h5>
+            <ul class="list-group">
+              <li class="list-group-item">
+                <svg width="32" height="32">
+                  <circle
+                    style="fill: red; stroke-width: 2px; stroke: black;"
+                    cx="16" cy="16" r="7"></svg> Binary search
+              </li>
+              <li class="list-group-item">
+                <svg width="32" height="32">
+                  <circle
+                    style="fill: blue; stroke-width: 2px; stroke: black;"
+                    cx="16" cy="16" r="7"></svg> B-Tree
+              </li>
+              <li class="list-group-item">
+                <svg width="32" height="32">
+                  <circle
+                    style="fill: yellow; stroke-width: 2px; stroke: black;"
+                    cx="16" cy="16" r="7"></svg> RMI
+              </li>
+              <li class="list-group-item">
+                <svg width="32" height="32">
+                  <circle
+                    style="fill: red; stroke-width: 2px; stroke: black;"
+                    cx="16" cy="16" r="7"></svg>
+                <svg width="32" height="32">
+                  <circle
+                    style="fill: blue; stroke-width: 2px; stroke: black;"
+                    cx="16" cy="16" r="7"></svg>
+                <svg width="32" height="32">
+                  <circle
+                    style="fill: yellow; stroke-width: 2px; stroke: black;"
+                    cx="16" cy="16" r="7"></svg> On front
+              </li>
+              <li class="list-group-item">
+                <svg width="32" height="32">
+                  <circle
+                    style="fill: red; stroke-width: 2px; stroke: black; opacity: 0.5;"
+                    cx="16" cy="16" r="7"></svg>
+                <svg width="32" height="32">
+                  <circle
+                    style="fill: blue; stroke-width: 2px; stroke: black; opacity: 0.5;"
+                    cx="16" cy="16" r="7"></svg>
+                <svg width="32" height="32">
+                  <circle
+                    style="fill: yellow; stroke-width: 2px; stroke: black; opacity: 0.5;"
+                    cx="16" cy="16" r="7"></svg> Off front
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
-      <div>
-        Branching factor:
-        <select id="rmi1-bf">
-          <option value="1024">1024</option>
-          <option value="2048">2048</option>
-          <option value="4096">4096</option>
-          <option value="8092">8092</option>
-        </select>
+    </div>
+
+
+
+    <!-- inspector modal -->
+    <div class="modal fade" id="rmi-inspect" tabindex="-1" role="dialog" aria-labelledby="rmi-inspect-label" aria-hidden="true">
+      <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="rmi-inspect-label"></h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div id="rmi-inspect-status"></div>
+            <div id="rmi-inspect-graph"></div>
+            <div id="rmi-inspect-content"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+          </div>
+        </div>
       </div>
-      <button id="rmi1-update">Update</button>
     </div>
   </body>
 

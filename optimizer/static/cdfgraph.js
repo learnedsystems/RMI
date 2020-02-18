@@ -3,14 +3,48 @@ function closest(arr, val) {
     return arr.reduce((min, val) => metric(min) < metric(val) ? min : val, arr[0]);
 }
 
-class CDFGraph {
+
+class InfoTable {
     constructor(elID) {
         this.elID = elID;
+        this.table = d3.select(`#${this.elID}`)
+            .append("table")
+            .attr("class", "table table-hover info-table")
+            .append("tbody");
+
+        this.rmiName = this.createLabel("RMI Config");
+        this.rmiMaxError = this.createLabel("Max error");
+        this.rmiAvgError = this.createLabel("Average error");
+        this.rmiSize = this.createLabel("Size");
+    }
+
+    setName(name) {
+        this.rmiName.text(name);
+    }
+
+    updateStats(stats) {
+        this.rmiMaxError.text(stats["max error"]);
+        this.rmiAvgError.text(stats["average error"].toFixed(4));
+        this.rmiSize.text(humanFileSize(stats["size binary search"]));
+    }
+    
+    createLabel(lbl) {
+        const row = this.table.append("tr");
+        row.append("td").append("strong").text(lbl);
+        return row.append("td");
+    }
+}
+
+class CDFGraph {
+    constructor(elID, infoTableID) {
+        this.elID = elID;
+        this.infoTable = new InfoTable(infoTableID);
         this.wgraph = 640;
         this.hgraph = 480;
         this.dataset = "osm_cellids_200M_uint64";
         this.layers = "linear,linear";
         this.bf = "1024";
+        this.currentStats = false;
         
         this.paddingLeft = 100;
         this.paddingBottom = 70;
@@ -31,6 +65,14 @@ class CDFGraph {
         this.rmiDots = this.svg.append('g').attr("class", "dots");
         this.cdfPoints = this.svg.append('path').attr('class', "line");
         this.rmiPoints = this.svg.append('path').attr('class', "line");
+
+        this.rmiLabel = this.svg.append('text')
+            .attr("x", this.paddingLeft + 20)
+            .attr("y", this.paddingTop + 20)
+            .attr("class", "rmi-label");
+        this.updateRMILabel();
+        
+
 
         this.hoverLine = this.svg.append("line").attr("class", "hover-line");
         this.hoverCircleRMI = this.svg.append("circle").attr("class", "hover-circle");
@@ -73,6 +115,21 @@ class CDFGraph {
         });
         this.svg.on("mousemove", d => { this.updateHover(d3.event.x); });
 
+    }
+
+    setLayers(layers) {
+        this.layers = layers;
+        this.updateRMILabel();
+    }
+
+    setBranchingFactor(bf) {
+        this.bf = bf;
+        this.updateRMILabel();
+    }
+
+    updateRMILabel() {
+        this.rmiLabel.text(`${this.layers} ${this.bf}`);
+        this.infoTable.setName(`${this.layers} ${this.bf}`);
     }
 
     reset(x) {
@@ -149,11 +206,18 @@ class CDFGraph {
     }
 
     async update() {
+        showProgressIndicator();
         const resp = await fetch(`/data/${this.dataset}/${this.keyMin}/${this.keyMax}`);
         const json = (await resp.json()).data;
 
         const respRMI = await fetch(`/rmi/${this.dataset}/${this.layers}/${this.bf}/${this.keyMin}/${this.keyMax}`);
-        const jsonRMI = (await respRMI.json()).data;
+        const allRMIJSON = await respRMI.json();
+        const rmiStats = allRMIJSON.stats;
+        const jsonRMI = allRMIJSON.data;
+
+        this.currentStats = rmiStats;
+        this.infoTable.updateStats(rmiStats);
+        
 
         // y values for RMI may not be monotonic
         this.xMin = Math.min(json[0].x, jsonRMI[0].x);
@@ -172,6 +236,7 @@ class CDFGraph {
         this.createScales();
         this.addAxes();
         this.plotData();
+        hideProgressIndicator();
     }
 
     createScales() {

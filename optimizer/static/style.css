@@ -1,3 +1,19 @@
+#global-loader {
+    position: absolute;
+    background-color: white;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    padding-top: 200px;
+    margin: 0px;
+    top: 0px;
+    display: none;
+}
+
+#rmi-inspect-graph {
+    text-align: center;
+}
+
 .tick {
     font-size: 12pt;
 }
@@ -5,6 +21,10 @@
 .axis-label {
     font-size: 12pt;
     font-weight: bold;
+}
+
+.rmi-label {
+    font-family: monospace;
 }
 
 .selector-rect {
@@ -21,4 +41,15 @@
 
 .hover-line {
     stroke: gray;
+}
+
+#pareto-tooltip {
+    display: none;
+    position: absolute;
+    top: -100;
+    left: -100;
+    background: white;
+    border: 1px solid black;
+    padding: 10px;
+    z-index: 100;
 }
