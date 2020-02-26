@@ -137,7 +137,8 @@ impl LayerParams {
             }
 
             LayerParams::Array(idx, _) => {
-                write!(target, "{}[{}]", array_name!(idx), parameter_index)?;
+                write!(target, "{}", array_name!(idx))?; // TODO we assume only 1 array param per layer
+                //write!(target, "{}[{}]", array_name!(idx), parameter_index)?;
             }
         };
 
@@ -170,9 +171,11 @@ fn params_for_layer(layer_idx: usize, models: &[Box<dyn Model>]) -> LayerParams 
     if models.len() == 1 {
         // treat this data as constant, as long as it isn't too big.
         let params: Vec<ModelParam> = models[0].params();
-        let _size: usize = params.iter().map(|mp| mp.size()).sum();
-        
-        return LayerParams::Constant(layer_idx, params);
+        let size: usize = params.iter().map(|mp| mp.size()).sum();
+
+        if size < 4096 {
+            return LayerParams::Constant(layer_idx, params);
+        }
     }
 
     // we have more than one model in this layer, so we need to make an array.
@@ -270,8 +273,8 @@ fn generate_code<T: Write>(
             
             for lp in layer_params.iter() {
                 match lp {
-                    // constants are still put directly in the header
-                    LayerParams::Constant(_, _) => lp.to_code(data_output)?,
+                    // constants are still put directly in the header 
+                    LayerParams::Constant(_idx, _) => lp.to_code(data_output)?,
                     
                     LayerParams::Array(idx, _) => {
                         let data_path = Path::new(&path).join(format!("{}_{}", namespace, array_name!(idx)));
