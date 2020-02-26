@@ -27,6 +27,7 @@ pub use normal::LogNormalModel;
 pub use normal::NormalModel;
 pub use pgm::PGM;
 pub use radix::RadixModel;
+pub use radix::RadixTable;
 pub use stdlib::StdFunctions;
 
 use std::collections::HashSet;
@@ -228,6 +229,7 @@ pub enum ModelParam {
     Float(f64),
     ShortArray(Vec<u16>),
     IntArray(Vec<u64>),
+    Int32Array(Vec<u32>),
     FloatArray(Vec<f64>),
 }
 
@@ -239,6 +241,7 @@ impl ModelParam {
             ModelParam::Float(_) => 8,
             ModelParam::ShortArray(a) => 2 * a.len(),
             ModelParam::IntArray(a) => 8 * a.len(),
+            ModelParam::Int32Array(a) => 4 * a.len(),
             ModelParam::FloatArray(a) => 8 * a.len(),
         }
     }
@@ -249,6 +252,7 @@ impl ModelParam {
             ModelParam::Float(_) => "double",
             ModelParam::ShortArray(_) => "short",
             ModelParam::IntArray(_) => "uint64_t",
+            ModelParam::Int32Array(_) => "uint32_t",
             ModelParam::FloatArray(_) => "double",
         }
     }
@@ -259,6 +263,7 @@ impl ModelParam {
             ModelParam::Float(_) => "",
             ModelParam::ShortArray(_) => "[]",
             ModelParam::IntArray(_) => "[]",
+            ModelParam::Int32Array(_) => "[]",
             ModelParam::FloatArray(_) => "[]",
         }
     }
@@ -272,15 +277,19 @@ impl ModelParam {
                     tmp.push_str(".0");
                 }
                 return tmp;
-            }
+            },
             ModelParam::ShortArray(arr) => {
                 let itms: Vec<String> = arr.iter().map(|i| format!("{}", i)).collect();
                 return format!("{{ {} }}", itms.join(", "));
-            }
+            },
             ModelParam::IntArray(arr) => {
                 let itms: Vec<String> = arr.iter().map(|i| format!("{}UL", i)).collect();
                 return format!("{{ {} }}", itms.join(", "));
-            }
+            },
+            ModelParam::Int32Array(arr) => {
+                let itms: Vec<String> = arr.iter().map(|i| format!("{}UL", i)).collect();
+                return format!("{{ {} }}", itms.join(", "));
+            },
             ModelParam::FloatArray(arr) => {
                 let itms: Vec<String> = arr
                     .iter()
@@ -325,7 +334,15 @@ impl ModelParam {
                 }
 
                 Ok(())
-            }
+            },
+
+            ModelParam::Int32Array(arr) => {
+                for v in arr {
+                    target.write_u32::<LittleEndian>(*v)?;
+                }
+
+                Ok(())
+            },
 
             ModelParam::FloatArray(arr) => {
                 for v in arr {
@@ -345,6 +362,7 @@ impl ModelParam {
             ModelParam::Float(v) => *v,
             ModelParam::ShortArray(_) => panic!("Cannot treat a short array parameter as a float"),
             ModelParam::IntArray(_) => panic!("Cannot treat an int array parameter as a float"),
+            ModelParam::Int32Array(_) => panic!("Cannot treat an int32 array parameter as a float"),
             ModelParam::FloatArray(_) => panic!("Cannot treat an float array parameter as a float"),
         }
     }
@@ -355,6 +373,7 @@ impl ModelParam {
             ModelParam::Float(_) => 1,
             ModelParam::ShortArray(p) => p.len(),
             ModelParam::IntArray(p) => p.len(),
+            ModelParam::Int32Array(p) => p.len(),
             ModelParam::FloatArray(p) => p.len()
         }
     }
@@ -393,6 +412,12 @@ impl From<Vec<u16>> for ModelParam {
 impl From<Vec<u64>> for ModelParam {
     fn from(f: Vec<u64>) -> Self {
         ModelParam::IntArray(f)
+    }
+}
+
+impl From<Vec<u32>> for ModelParam {
+    fn from(f: Vec<u32>) -> Self {
+        ModelParam::Int32Array(f)
     }
 }
 
