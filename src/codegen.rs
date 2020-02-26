@@ -168,8 +168,15 @@ impl LayerParams {
 
 fn params_for_layer(layer_idx: usize, models: &[Box<dyn Model>]) -> LayerParams {
     if models.len() == 1 {
+        // treat this data as constant, as long as it isn't too big.
         let params: Vec<ModelParam> = models[0].params();
-        return LayerParams::Constant(layer_idx, params);
+        let size: usize = params.iter().map(|mp| mp.size()).sum();
+        
+        if size < 4096 {
+            return LayerParams::Constant(layer_idx, params);
+        } else {
+            return LayerParams::Array(layer_idx, params);
+        }
     }
 
     // we have more than one model in this layer, so we need to make an array.

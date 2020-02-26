@@ -135,18 +135,18 @@ fn main() {
                           .template("{pos} / {len} ({msg}) {wide_bar} {eta}"));
             
             let mut results = json::JsonValue::new_array();
-            
-            for (models, branch_factor, namespace, bsearch) in to_test {
-                trace!("Training RMI {} with branching factor {}", models, branch_factor);
-                bar.set_message(format!("{} {}", models, branch_factor).as_str());
+
+            to_test.iter().for_each(|(models, branch_factor, namespace, bsearch)| {
+                trace!("Training RMI {} with branching factor {}", models, *branch_factor);
+                
                 // TODO this copy should not be required
-                let trained_model = train(data.clone(), &models, branch_factor);
+                let trained_model = train(data.clone(), models, *branch_factor);
                 
                 let size_bs = codegen::rmi_size(&trained_model.rmi, true);
                 let size_ls = codegen::rmi_size(&trained_model.rmi, false);
                 results.push(object! {
                     "layers" => models.clone(),
-                    "branching factor" => branch_factor,
+                    "branching factor" => *branch_factor,
                     "average error" => trained_model.model_avg_error as f64,
                     "average error %" => trained_model.model_max_error as f64 / num_rows as f64 * 100.0,
                     "average log2 error" => trained_model.model_avg_log2_error,
@@ -155,13 +155,13 @@ fn main() {
                     "size binary search" => size_bs,
                     "size linear search" => size_ls,
                     "namespace" => namespace.clone(),
-                    "binary" => bsearch
+                    "binary" => *bsearch
                 }).unwrap();
 
                 if let Some(nmspc) = namespace {
                     codegen::output_rmi(
                         &nmspc,
-                        bsearch,
+                        *bsearch,
                         trained_model,
                         num_rows,
                         0,
@@ -170,7 +170,7 @@ fn main() {
                 }
                 
                 bar.inc(1);
-            }
+            });
             bar.finish();
 
             let f = File::create(format!("{}_results", param_grid)).expect("Could not write results file");
