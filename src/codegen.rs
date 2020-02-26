@@ -170,7 +170,7 @@ fn params_for_layer(layer_idx: usize, models: &[Box<dyn Model>]) -> LayerParams 
     if models.len() == 1 {
         // treat this data as constant, as long as it isn't too big.
         let params: Vec<ModelParam> = models[0].params();
-        let size: usize = params.iter().map(|mp| mp.size()).sum();
+        let _size: usize = params.iter().map(|mp| mp.size()).sum();
         
         return LayerParams::Constant(layer_idx, params);
     }
