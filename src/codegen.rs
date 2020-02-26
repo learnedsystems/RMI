@@ -14,7 +14,13 @@ use std::str;
 use crate::train::TrainedRMI;
 use std::fs::File;
 use std::io::BufWriter;
+use std::path::Path;
 
+
+enum StorageConf {
+    Embed,
+    Disk(String)
+}
 
 enum LayerParams {
     Constant(usize, Vec<ModelParam>),
@@ -27,20 +33,28 @@ macro_rules! constant_name {
     };
 }
 
+
+// slight hack here -- special-case index 9999 to be the model
+// error parameters (if you have a 9999 layer RMI, something else is wrong).
+const MODEL_ERROR_MAGIC_NUM: usize = 9999;
 macro_rules! array_name {
     ($layer: expr) => {
-        format!("L{}_PARAMETERS", $layer);
+        if $layer == &MODEL_ERROR_MAGIC_NUM {
+            format!("errors")
+        } else {
+            format!("L{}_PARAMETERS", $layer)
+        }
     };
 }
 
-impl LayerParams {
+impl LayerParams {    
     fn to_code<T: Write>(&self, target: &mut T) -> Result<(), std::io::Error> {
         match self {
             LayerParams::Constant(idx, params) => {
                 for (p_idx, param) in params.iter().enumerate() {
                     writeln!(
                         target,
-                        "const static {} {}{} = {};",
+                        "const {} {}{} = {};",
                         param.c_type(),
                         constant_name!(idx, p_idx),
                         param.c_type_mod(),
@@ -52,7 +66,7 @@ impl LayerParams {
             LayerParams::Array(idx, params) => {
                 write!(
                     target,
-                    "const static {} {}[] = {{",
+                    "const {} {}[] = {{",
                     params[0].c_type(),
                     array_name!(idx)
                 )?;
@@ -67,6 +81,49 @@ impl LayerParams {
         };
 
         return Result::Ok(());
+    }
+
+    fn to_decl<T: Write>(&self, target: &mut T) -> Result<(), std::io::Error> {
+        match self {
+            LayerParams::Constant(_, _) => {
+                panic!("Cannot forward-declare constants");
+            }
+
+            LayerParams::Array(idx, params) => {
+                let num_items: usize = params.iter().map(|p| p.len()).sum();
+                writeln!(
+                    target,
+                    "{} {}[{}];",
+                    params[0].c_type(),
+                    array_name!(idx),
+                    num_items
+                )?;
+            }
+        };
+
+        return Result::Ok(());
+    }
+
+
+    fn write_to<T: Write>(&self, target: &mut T) -> Result<(), std::io::Error> {
+        if let LayerParams::Array(_idx, params) = self {
+            let (first, rest) = params.split_first().unwrap();
+
+            first.write_to(target)?;
+            for itm in rest {
+                assert!(first.is_same_type(itm));
+                itm.write_to(target)?;
+            }
+            return Ok(());
+        }
+        panic!("Cannot write constant parameters to binary file.");
+    }
+
+    fn size(&self) -> usize {
+        match self {
+            LayerParams::Array(_, params) => params.iter().map(|p| p.size()).sum(),
+            LayerParams::Constant(_, params) => params.iter().map(|p| p.size()).sum()
+        }
     }
 
     fn access_by_const<T: Write>(
@@ -143,19 +200,19 @@ macro_rules! model_index_from_output {
 
 pub fn rmi_size(rmi: &[Vec<Box<dyn Model>>], report_last_layer_errors: bool) -> u64 {
     // compute the RMI size (used in the header, compute here before consuming)
-    let mut num_total_params = 0;
+    let mut num_total_bytes = 0;
     for layer in rmi.iter() {
         let model_on_this_layer_size: usize = layer[0].params().iter().map(|p| p.size()).sum();
         
         // assume all models on this layer have the same size
-        num_total_params += model_on_this_layer_size * layer.len();
+        num_total_bytes += model_on_this_layer_size * layer.len();
     }
-    
+
     if report_last_layer_errors {
-        num_total_params += rmi.last().unwrap().len();
+        num_total_bytes += rmi.last().unwrap().len() * 8;
     }
     
-    return num_total_params as u64 * 8
+    return num_total_bytes as u64;
 }
 
 fn generate_code<T: Write>(
@@ -166,10 +223,11 @@ fn generate_code<T: Write>(
     total_rows: usize,
     rmi: Vec<Vec<Box<dyn Model>>>,
     last_layer_errors: Option<Vec<u64>>,
+    storage: StorageConf,
     build_time: u128,
 ) -> Result<(), std::io::Error> {
     // construct the code for the model parameters.
-    let layer_params: Vec<LayerParams> = rmi
+    let mut layer_params: Vec<LayerParams> = rmi
         .iter()
         .enumerate()
         .map(|(layer_idx, models)| params_for_layer(layer_idx, models))
@@ -177,24 +235,62 @@ fn generate_code<T: Write>(
 
     let report_last_layer_errors = last_layer_errors.is_some();
 
-    writeln!(data_output, "namespace {} {{", namespace)?;    
-    
-    for lp in layer_params.iter() {
-        lp.to_code(data_output)?;
-    }
-
-    if let Some(lle) = last_layer_errors.as_ref() {
-        if lle.len() > 1 {
-            // save the last layer error data if there is more than one model
-            // on the final layer.
-            write!(data_output, "const size_t errors[] = {{")?;
-            let (last, rest) = lle.split_last().unwrap();
-            for err in rest {
-                write!(data_output, "{},", err)?;
+    let mut report_lle = String::new();
+    if report_last_layer_errors {
+        if let Some(lle) = last_layer_errors {
+            assert!(!lle.is_empty());
+            if lle.len() > 1 {
+                report_lle = String::from("  *err = errors[modelIndex];");
+            } else {
+                report_lle = format!("  *err = {};", lle[0]);
             }
-            writeln!(data_output, "{} }};", last)?;
+            
+            layer_params.push(LayerParams::Array(MODEL_ERROR_MAGIC_NUM,
+                                                 vec![ModelParam::IntArray(lle)]));
         }
     }
+
+    writeln!(data_output, "namespace {} {{", namespace)?;    
+    
+    let mut read_code = Vec::new();
+    match &storage {
+        // embed the data directly inside of the header files
+        StorageConf::Embed => {
+            for lp in layer_params.iter() {
+                lp.to_code(data_output)?;
+            }
+        },
+
+        // store the data on disk, add code to load it
+        StorageConf::Disk(path) => {
+            read_code.push(format!("void load(char const* dataPath) {{"));
+            
+            for lp in layer_params.iter() {
+                match lp {
+                    // constants are still put directly in the header
+                    LayerParams::Constant(_, _) => lp.to_code(data_output)?,
+                    
+                    LayerParams::Array(idx, _) => {
+                        let data_path = Path::new(&path).join(format!("{}_{}", namespace, array_name!(idx)));
+                        let f = File::create(data_path).expect("Could not write data file");
+                        let mut bw = BufWriter::new(f);
+
+                        lp.write_to(&mut bw)?; // write to data file
+                        lp.to_decl(data_output)?; // write to source code
+
+                        read_code.push(format!("  {{"));
+                        read_code.push(format!("    std::ifstream infile(std::filesystem::path(dataPath) / \"{ns}_{fn}\", std::ios::in | std::ios::binary);",
+                                               ns=namespace, fn=array_name!(idx)));
+                        read_code.push(format!("    infile.read((char*){fn}, {size});",
+                                               fn=array_name!(idx), size=lp.size()));
+                        read_code.push(format!("  }}"));
+                    }
+                }
+            }
+            read_code.push(format!("}}"));
+
+        }
+    };
 
     writeln!(data_output, "}} // namespace")?;
 
@@ -212,7 +308,16 @@ fn generate_code<T: Write>(
     writeln!(code_output, "#include \"{}.h\"", namespace)?;
     writeln!(code_output, "#include \"{}_data.h\"", namespace)?;
     writeln!(code_output, "#include <math.h>")?;
+    writeln!(code_output, "#include <fstream>")?;
+    writeln!(code_output, "#include <filesystem>")?;
+    writeln!(code_output, "#include <iostream>")?;
+
     writeln!(code_output, "namespace {} {{", namespace)?;
+
+    for ln in read_code {
+        writeln!(code_output, "{}", ln)?;
+    }
+    
     for decl in decls {
         writeln!(code_output, "{}", decl)?;
     }
@@ -265,7 +370,7 @@ inline size_t FCLAMP(double inp, double bound) {{
     }
 
     let model_size_bytes = rmi_size(&rmi, report_last_layer_errors);
-    info!("Generated model size: {:?}", ByteSize(model_size_bytes));
+    info!("Generated model size: {:?} ({} bytes)", ByteSize(model_size_bytes), model_size_bytes);
 
     let mut last_model_output = ModelDataType::Int;
     let mut needs_bounds_check = true;
@@ -323,16 +428,7 @@ inline size_t FCLAMP(double inp, double bound) {{
         needs_bounds_check = layer[0].needs_bounds_check();
     }
 
-    if report_last_layer_errors {
-        if let Some(lle) = last_layer_errors {
-            assert!(!lle.is_empty());
-            if lle.len() > 1 {
-                writeln!(code_output, "  *err = errors[modelIndex];")?;
-            } else {
-                writeln!(code_output, "  *err = {};", lle[0])?;
-            }
-        }
-    }
+    writeln!(code_output, "{}", report_lle)?;
 
     writeln!(
         code_output,
@@ -347,6 +443,11 @@ inline size_t FCLAMP(double inp, double bound) {{
     writeln!(header_output, "#include <cstddef>")?;
     writeln!(header_output, "#include <cstdint>")?;
     writeln!(header_output, "namespace {} {{", namespace)?;
+
+    if let StorageConf::Disk(_) = storage {
+        writeln!(header_output, "void load(char const* dataPath);")?;
+    }
+
     
     if !report_last_layer_errors {
         writeln!(header_output, "#ifdef EXTERN_RMI_LOOKUP")?;
@@ -377,7 +478,8 @@ pub fn output_rmi(namespace: &str,
                   last_layer_errors: bool,
                   trained_model: TrainedRMI,
                   num_rows: usize,
-                  build_time: u128) -> Result<(), std::io::Error> {
+                  build_time: u128,
+                  data_dir: Option<&str>) -> Result<(), std::io::Error> {
     
     let f1 = File::create(format!("{}.cpp", namespace)).expect("Could not write RMI CPP file");
     let mut bw1 = BufWriter::new(f1);
@@ -394,6 +496,11 @@ pub fn output_rmi(namespace: &str,
     } else {
         None
     };
+
+    let conf = match data_dir {
+        None => StorageConf::Embed,
+        Some(s) => StorageConf::Disk(String::from(s))
+    };
     
     return generate_code(
         &mut bw1,
@@ -403,6 +510,7 @@ pub fn output_rmi(namespace: &str,
         num_rows,
         trained_model.rmi,
         lle,
+        conf,
         build_time,
     );
         

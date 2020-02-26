@@ -27,9 +27,12 @@ pub use normal::LogNormalModel;
 pub use normal::NormalModel;
 pub use pgm::PGM;
 pub use radix::RadixModel;
+pub use radix::RadixTable;
 pub use stdlib::StdFunctions;
 
 use std::collections::HashSet;
+use std::io::Write;
+use byteorder::{WriteBytesExt, LittleEndian};
 
 #[derive(Clone)]
 pub enum ModelData {
@@ -110,55 +113,9 @@ macro_rules! define_iterator_type {
     };
 }
 
-macro_rules! define_iterator_type_skip {
-    ($name: tt, $type1: ty, $type2: ty) => {
-        pub struct $name<'a> {
-            data: &'a ModelData,
-            idx: usize,
-            factor: usize
-        }
-
-        impl<'a> $name<'a> {
-            fn new(data: &'a ModelData, factor: usize) -> $name<'a> {
-                assert!(factor < 100);
-                return $name { data, idx: 0 , factor};
-            }
-        }
-
-        impl<'a> Iterator for $name<'a> {
-            type Item = ($type1, $type2);
-
-            fn next(&mut self) -> Option<Self::Item> {
-                if self.idx >= self.data.len() {
-                    return None;
-                }
-
-                let itm = match self.data {
-                    ModelData::FloatKeyToFloatPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2)
-                    }
-                    ModelData::FloatKeyToIntPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2)
-                    }
-                    ModelData::IntKeyToIntPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2)
-                    }
-                    ModelData::IntKeyToFloatPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2)
-                    }
-                };
-                self.idx += 1;
-                if self.idx % self.factor == 0 { self.idx += 1; }
-
-                return Some(itm);
-            }
-        }
-    };
-}
 
 define_iterator_type!(ModelDataFFIterator, f64, f64);
 define_iterator_type!(ModelDataIIIterator, u64, u64);
-define_iterator_type_skip!(ModelDataFFIteratorSkip, f64, f64);
 //define_iterator_type_skip!(ModelDataIIIteratorSkip, u64, u64);
 //define_iterator_type!(ModelDataFIIterator, f64, u64);
 //define_iterator_type!(ModelDataIFIterator, u64, f64);
@@ -171,9 +128,6 @@ impl ModelData {
         return ModelDataIIIterator::new(&self);
     }
 
-    pub fn iter_float_float_skip(&self, factor: usize) -> ModelDataFFIteratorSkip {
-        return ModelDataFFIteratorSkip::new(&self, factor);
-    }
     /*pub fn iter_int_int_skip(&self, factor: usize) -> ModelDataIIIteratorSkip {
         return ModelDataIIIteratorSkip::new(&self, factor);
     }*/
@@ -275,6 +229,7 @@ pub enum ModelParam {
     Float(f64),
     ShortArray(Vec<u16>),
     IntArray(Vec<u64>),
+    Int32Array(Vec<u32>),
     FloatArray(Vec<f64>),
 }
 
@@ -286,6 +241,7 @@ impl ModelParam {
             ModelParam::Float(_) => 8,
             ModelParam::ShortArray(a) => 2 * a.len(),
             ModelParam::IntArray(a) => 8 * a.len(),
+            ModelParam::Int32Array(a) => 4 * a.len(),
             ModelParam::FloatArray(a) => 8 * a.len(),
         }
     }
@@ -296,6 +252,7 @@ impl ModelParam {
             ModelParam::Float(_) => "double",
             ModelParam::ShortArray(_) => "short",
             ModelParam::IntArray(_) => "uint64_t",
+            ModelParam::Int32Array(_) => "uint32_t",
             ModelParam::FloatArray(_) => "double",
         }
     }
@@ -306,6 +263,7 @@ impl ModelParam {
             ModelParam::Float(_) => "",
             ModelParam::ShortArray(_) => "[]",
             ModelParam::IntArray(_) => "[]",
+            ModelParam::Int32Array(_) => "[]",
             ModelParam::FloatArray(_) => "[]",
         }
     }
@@ -319,15 +277,19 @@ impl ModelParam {
                     tmp.push_str(".0");
                 }
                 return tmp;
-            }
+            },
             ModelParam::ShortArray(arr) => {
                 let itms: Vec<String> = arr.iter().map(|i| format!("{}", i)).collect();
                 return format!("{{ {} }}", itms.join(", "));
-            }
+            },
             ModelParam::IntArray(arr) => {
                 let itms: Vec<String> = arr.iter().map(|i| format!("{}UL", i)).collect();
                 return format!("{{ {} }}", itms.join(", "));
-            }
+            },
+            ModelParam::Int32Array(arr) => {
+                let itms: Vec<String> = arr.iter().map(|i| format!("{}UL", i)).collect();
+                return format!("{{ {} }}", itms.join(", "));
+            },
             ModelParam::FloatArray(arr) => {
                 let itms: Vec<String> = arr
                     .iter()
@@ -350,13 +312,69 @@ impl ModelParam {
         };
     }*/
 
+    pub fn is_same_type(&self, other: &ModelParam) -> bool {
+        return std::mem::discriminant(self) == std::mem::discriminant(other);
+    }
+
+    pub fn write_to<T: Write>(&self, target: &mut T) -> Result<(), std::io::Error> {
+        match self {
+            ModelParam::Int(v) => target.write_u64::<LittleEndian>(*v),
+            ModelParam::Float(v) => target.write_f64::<LittleEndian>(*v),
+            ModelParam::ShortArray(arr) => {
+                for v in arr {
+                    target.write_u16::<LittleEndian>(*v)?;
+                }
+
+                Ok(())
+            },
+            
+            ModelParam::IntArray(arr) => {
+                for v in arr {
+                    target.write_u64::<LittleEndian>(*v)?;
+                }
+
+                Ok(())
+            },
+
+            ModelParam::Int32Array(arr) => {
+                for v in arr {
+                    target.write_u32::<LittleEndian>(*v)?;
+                }
+
+                Ok(())
+            },
+
+            ModelParam::FloatArray(arr) => {
+                for v in arr {
+                    target.write_f64::<LittleEndian>(*v)?;
+                }
+
+                Ok(())
+
+            }
+
+        }
+    }
+    
     pub fn as_float(&self) -> f64 {
         match self {
             ModelParam::Int(v) => *v as f64,
             ModelParam::Float(v) => *v,
             ModelParam::ShortArray(_) => panic!("Cannot treat a short array parameter as a float"),
             ModelParam::IntArray(_) => panic!("Cannot treat an int array parameter as a float"),
+            ModelParam::Int32Array(_) => panic!("Cannot treat an int32 array parameter as a float"),
             ModelParam::FloatArray(_) => panic!("Cannot treat an float array parameter as a float"),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            ModelParam::Int(_) => 1,
+            ModelParam::Float(_) => 1,
+            ModelParam::ShortArray(p) => p.len(),
+            ModelParam::IntArray(p) => p.len(),
+            ModelParam::Int32Array(p) => p.len(),
+            ModelParam::FloatArray(p) => p.len()
         }
     }
 }
@@ -394,6 +412,12 @@ impl From<Vec<u16>> for ModelParam {
 impl From<Vec<u64>> for ModelParam {
     fn from(f: Vec<u64>) -> Self {
         ModelParam::IntArray(f)
+    }
+}
+
+impl From<Vec<u32>> for ModelParam {
+    fn from(f: Vec<u32>) -> Self {
+        ModelParam::Int32Array(f)
     }
 }
 

@@ -70,17 +70,20 @@ fn main() {
              .long("param-grid")
              .value_name("file")
              .help("train the RMIs specified in the JSON file and report their errors"))
-        .arg(Arg::with_name("fast-top")
-              .long("fast-top")
-              .help("train top level models using a downsampled version of the data for speed"))
+        .arg(Arg::with_name("data-path")
+             .long("data-path")
+             .short("d")
+             .value_name("dir")
+             .help("exports parameters to files in this directoyr instead of embedding them"))
         .get_matches();
 
     let fp = matches.value_of("input").unwrap();
-    let fast_top = matches.is_present("fast-top");
     let downsample = matches
         .value_of("downsample")
         .map(|x| x.parse::<usize>().unwrap())
         .unwrap_or(1);
+
+    let data_dir = matches.value_of("data-path");
     
     if matches.value_of("namespace").is_some() && matches.value_of("param-grid").is_some() {
         panic!("Can only specify one of namespace or param-grid");
@@ -137,7 +140,7 @@ fn main() {
                 trace!("Training RMI {} with branching factor {}", models, branch_factor);
                 bar.set_message(format!("{} {}", models, branch_factor).as_str());
                 // TODO this copy should not be required
-                let trained_model = train(data.clone(), &models, branch_factor, fast_top);
+                let trained_model = train(data.clone(), &models, branch_factor);
                 
                 let size_bs = codegen::rmi_size(&trained_model.rmi, true);
                 let size_ls = codegen::rmi_size(&trained_model.rmi, false);
@@ -161,7 +164,8 @@ fn main() {
                         bsearch,
                         trained_model,
                         num_rows,
-                        0).unwrap();
+                        0,
+                        data_dir).unwrap();
 
                 }
                 
@@ -190,7 +194,7 @@ fn main() {
        
         
         let last_layer_errors = matches.is_present("last-layer-errors");
-        let trained_model = train(data, models, branch_factor, fast_top);
+        let trained_model = train(data, models, branch_factor);
         
         let build_time = SystemTime::now()
             .duration_since(start_time)
@@ -235,7 +239,8 @@ fn main() {
                 last_layer_errors,
                 trained_model,
                 num_rows,
-                build_time).unwrap();
+                build_time,
+                data_dir).unwrap();
         } else {
             trace!("Skipping code generation due to CLI flag");
         }
