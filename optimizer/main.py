@@ -18,7 +18,7 @@ RMI_CACHE_DIR = "/ssd1/ryan/rmi_cache"
 
 # define the model search space
 TOP_ONLY_LAYERS = ["radix", "bradix", "radix18", "radix22", "radix26"]
-ANYWHERE_LAYERS = ["linear", "cubic"]
+ANYWHERE_LAYERS = ["linear", "cubic", "radix8"]
 SPECIALTY_TOP_LAYERS = ["histogram", "loglinear", "normal", "lognormal"]
 BRANCHING_FACTORS = list(int(x) for x in 2**np.arange(7, 22, 1))
 ALL_TOP_LAYERS = TOP_ONLY_LAYERS + ANYWHERE_LAYERS
@@ -133,7 +133,7 @@ def cache_rmi(data_path, result):
         json.dump(result, f)
 
     
-def parallel_test_rmis(data_path, configs, threads=6, phase=""):
+def parallel_test_rmis(data_path, configs, threads=12, phase=""):
     if len(configs) < threads:
         threads = len(configs)
 
