@@ -25,6 +25,7 @@ fn train_model(model_type: &str, data: &ModelData) -> Box<dyn Model> {
         "normal" => Box::new(NormalModel::new(data)),
         "lognormal" => Box::new(LogNormalModel::new(data)),
         "radix" => Box::new(RadixModel::new(data)),
+        "radix8" => Box::new(RadixTable::new(data, 8)),
         "radix18" => Box::new(RadixTable::new(data, 18)),
         "radix22" => Box::new(RadixTable::new(data, 22)),
         "radix26" => Box::new(RadixTable::new(data, 26)),
