@@ -17,7 +17,7 @@ RMI_PATH = "../target/release/rmi"
 RMI_CACHE_DIR = "/ssd1/ryan/rmi_cache"
 
 # define the model search space
-TOP_ONLY_LAYERS = ["radix", "bradix"]
+TOP_ONLY_LAYERS = ["radix", "bradix", "radix18", "radix22", "radix26"]
 ANYWHERE_LAYERS = ["linear", "cubic"]
 SPECIALTY_TOP_LAYERS = ["histogram", "loglinear", "normal", "lognormal"]
 BRANCHING_FACTORS = list(int(x) for x in 2**np.arange(7, 22, 1))
@@ -357,14 +357,14 @@ def optimize(data_path):
     step1_results = pd.DataFrame(step1_results)
 
     # measure inference time
-    step1_results["inference"] = inference(data_path, step1_results)
+    #step1_results["inference"] = inference(data_path, step1_results)
 
-    # always test bradix linear models
+    # always test specific model types
     step1_results["star"] = False
-    step1_results.loc[step1_results["layers"] == "bradix,linear", "star"] = True
-    step1_results.loc[step1_results["layers"] == "radix,linear", "star"] = True
+    #step1_results.loc[step1_results["layers"] == "bradix,linear", "star"] = True
+    #step1_results.loc[step1_results["layers"] == "radix,linear", "star"] = True
 
-    mask = pareto_mask(step1_results)
+    mask = pareto_mask(step1_results, props=["size binary search", "average log2 error"])
     pareto = step1_results[mask]
 
     cpy = step1_results.copy()
@@ -384,7 +384,7 @@ def optimize(data_path):
     step2_results = pd.DataFrame(step2_results)
 
     # measure inference time
-    step2_results["inference"] = inference(data_path, step2_results)
+    #step2_results["inference"] = inference(data_path, step2_results)
             
     print("Step 2 ends with", len(step2_results), "models considered")
     
@@ -397,10 +397,10 @@ def optimize(data_path):
     # build configs for all models on the front
     # always test bradix linear models
     all_results["star"] = False
-    all_results.loc[all_results["layers"] == "bradix,linear", "star"] = True
-    all_results.loc[all_results["layers"] == "radix,linear", "star"] = True
+    #all_results.loc[all_results["layers"] == "bradix,linear", "star"] = True
+    #all_results.loc[all_results["layers"] == "radix,linear", "star"] = True
 
-    mask = pareto_mask(all_results)
+    mask = pareto_mask(all_results, props=["size binary search", "average log2 error"])
     pareto_results = all_results[mask]
 
     cpy = all_results.copy()
@@ -408,7 +408,8 @@ def optimize(data_path):
     cpy.to_csv("step2_out.csv", index=False)
     del cpy
 
-    
+
+    return
     step3_configs = []
     for _idx, row in pareto_results.iterrows():
         step3_configs.append(row.to_dict())
@@ -475,4 +476,4 @@ def optimize(data_path):
     
 
 if __name__ == "__main__":
-    optimize("/home/ryan/SOSD/data/wiki_ts_200M_uint64")
+    optimize("/home/ryan/SOSD-private/data/osm_cellids_200M_uint64")
