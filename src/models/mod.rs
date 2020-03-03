@@ -99,15 +99,6 @@ macro_rules! extract_and_convert_tuple {
     }};
 }
 
-macro_rules! scale_to_max {
-    ($max_val:expr, $num_rows:expr, $y_type:ty, $vec:expr) => {
-        for i in 0..($vec).len() {
-            let (x, y) = ($vec)[i];
-            let y_val = ($max_val) as f64 * (y as f64) / ($num_rows as f64);
-            ($vec)[i] = (x, y_val as $y_type);
-        }
-    };
-}
 
 macro_rules! define_iterator_type {
     ($name: tt, $type1: ty, $type2: ty) => {
@@ -198,15 +189,6 @@ impl ModelData {
             ModelData::FloatKeyToIntPos(data) => data.len(),
             ModelData::IntKeyToFloatPos(data) => data.len(),
             ModelData::IntKeyToIntPos(data) => data.len(),
-        };
-    }
-
-    pub fn scale_targets_to(&mut self, max_val: u64, num_rows: usize) {
-        match self {
-            ModelData::FloatKeyToFloatPos(data) => scale_to_max!(max_val, num_rows, f64, data),
-            ModelData::FloatKeyToIntPos(data) => scale_to_max!(max_val, num_rows, u64, data),
-            ModelData::IntKeyToFloatPos(data) => scale_to_max!(max_val, num_rows, f64, data),
-            ModelData::IntKeyToIntPos(data) => scale_to_max!(max_val, num_rows, u64, data),
         };
     }
 

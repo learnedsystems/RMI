@@ -6,8 +6,6 @@
 // < end copyright >
 use crate::models::*;
 use log::*;
-use rayon::iter::ParallelBridge;
-use rayon::prelude::ParallelIterator;
 
 pub struct TrainedRMI {
     pub model_avg_error: f64,
