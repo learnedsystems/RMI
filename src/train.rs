@@ -82,7 +82,7 @@ fn train_two_layer(data: ModelData,
     info!("Training top-level {} model layer", layer1_model);
     md_container.set_scale(num_leaf_models as f64 / num_rows as f64);
     let top_model = train_model(layer1_model, &md_container);
-    let mut leaf_models: Vec<Box<dyn Model>> = Vec::new();
+    let mut leaf_models: Vec<Box<dyn Model>> = Vec::with_capacity(num_leaf_models as usize);
 
     let mut second_layer_data = Vec::with_capacity(num_rows / num_leaf_models as usize);
     let mut last_target = 0;
