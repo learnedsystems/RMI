@@ -15,7 +15,7 @@ pub fn num_bits(largest_target: u64) -> u8 {
     return nbits;
 }
 
-pub fn common_prefix_size(data: &ModelData) -> u8 {
+pub fn common_prefix_size(data: &ModelDataContainer) -> u8 {
     let mut any_ones: u64 = 0;
     let mut no_ones: u64 = !0;
 
@@ -127,7 +127,7 @@ macro_rules! plr_with {
     }}
 }
 
-pub fn plr(data: &ModelData, delta: f64, optimal: bool) -> (Vec<u64>, Vec<f64>) {
+pub fn plr(data: &ModelDataContainer, delta: f64, optimal: bool) -> (Vec<u64>, Vec<f64>) {
     let segments = if optimal {
         plr_with!(OptimalPLR, delta, data)
     } else {
