@@ -34,6 +34,53 @@ use std::collections::HashSet;
 use std::io::Write;
 use byteorder::{WriteBytesExt, LittleEndian};
 
+pub struct ModelDataContainer {
+    model_data: ModelData,
+    scaling_factor: f64
+}
+
+impl ModelDataContainer {
+    pub fn new(md: ModelData) -> ModelDataContainer {
+        return ModelDataContainer {
+            model_data: md,
+            scaling_factor: 1.0
+        }
+    }
+
+    pub fn set_scale(&mut self, scale: f64) {
+        self.scaling_factor = scale;
+    }
+
+    pub fn len(&self) -> usize {
+        return self.model_data.len();
+    }
+
+    pub fn get(&self, idx: usize) -> (f64, f64) {
+        let (x, y) = self.model_data.get(idx);
+        return (x, y * self.scaling_factor);
+    }
+
+    pub fn get_key(&self, idx: usize) -> u64 {
+        return self.model_data.get_key(idx);
+    }
+
+    pub fn iter_float_float(&self) -> ModelDataFFIterator {
+        let mut iter = self.model_data.iter_float_float();
+        iter.set_scale(self.scaling_factor);
+        return iter;
+    }
+    
+    pub fn iter_int_int(&self) -> ModelDataIIIterator {
+        let mut iter = self.model_data.iter_int_int();
+        iter.set_scale(self.scaling_factor);
+        return iter;
+    }
+
+    pub fn as_int_int(&self) -> &[(u64, u64)] {
+        return self.model_data.as_int_int();
+    }
+}
+
 #[derive(Clone)]
 pub enum ModelData {
     IntKeyToIntPos(Vec<(u64, u64)>),
@@ -54,32 +101,36 @@ macro_rules! vec_to_ii {
 }
 
 macro_rules! extract_and_convert_tuple {
-    ($vec: expr, $idx: expr, $type1:ty, $type2:ty) => {{
+    ($vec: expr, $idx: expr, $type1:ty, $type2:ty, $scale: expr) => {{
         let (x, y) = $vec[$idx];
-        (x as $type1, y as $type2)
+        (x as $type1, (y as f64 * $scale) as $type2)
     }};
 }
 
-macro_rules! scale_to_max {
-    ($max_val:expr, $num_rows:expr, $y_type:ty, $vec:expr) => {
-        for i in 0..($vec).len() {
-            let (x, y) = ($vec)[i];
-            let y_val = ($max_val) as f64 * (y as f64) / ($num_rows as f64);
-            ($vec)[i] = (x, y_val as $y_type);
-        }
-    };
-}
 
 macro_rules! define_iterator_type {
     ($name: tt, $type1: ty, $type2: ty) => {
         pub struct $name<'a> {
             data: &'a ModelData,
             idx: usize,
+            scale: f64,
+            stop: usize
         }
 
         impl<'a> $name<'a> {
             fn new(data: &'a ModelData) -> $name<'a> {
-                return $name { data: data, idx: 0 };
+                return $name { data: data, idx: 0, scale: 1.0, stop: data.len() };
+            }
+
+            fn set_scale(&mut self, scale: f64) {
+                self.scale = scale;
+            }
+            #[allow(dead_code)]
+            pub fn bound(&mut self, start: usize, stop: usize) {
+                assert!(start < stop);
+                assert!(stop <= self.data.len());
+                self.idx = start;
+                self.stop = stop;
             }
         }
 
@@ -87,22 +138,22 @@ macro_rules! define_iterator_type {
             type Item = ($type1, $type2);
 
             fn next(&mut self) -> Option<Self::Item> {
-                if self.idx >= self.data.len() {
+                if self.idx >= self.stop {
                     return None;
                 }
 
                 let itm = match self.data {
                     ModelData::FloatKeyToFloatPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2)
+                        extract_and_convert_tuple!(data, self.idx, $type1, $type2, self.scale)
                     }
                     ModelData::FloatKeyToIntPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2)
+                        extract_and_convert_tuple!(data, self.idx, $type1, $type2, self.scale)
                     }
                     ModelData::IntKeyToIntPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2)
+                        extract_and_convert_tuple!(data, self.idx, $type1, $type2, self.scale)
                     }
                     ModelData::IntKeyToFloatPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2)
+                        extract_and_convert_tuple!(data, self.idx, $type1, $type2, self.scale)
                     }
                 };
                 self.idx += 1;
@@ -139,12 +190,21 @@ impl ModelData {
     }
 
     #[cfg(test)]
-    fn as_int_int(self) -> Vec<(u64, u64)> {
+    fn into_int_int(self) -> Vec<(u64, u64)> {
         return match self {
             ModelData::FloatKeyToFloatPos(data) => vec_to_ii!(data),
             ModelData::FloatKeyToIntPos(data) => vec_to_ii!(data),
             ModelData::IntKeyToFloatPos(data) => vec_to_ii!(data),
             ModelData::IntKeyToIntPos(data) => data,
+        };
+    }
+
+    fn as_int_int(&self) -> &[(u64, u64)] {
+        return match self {
+            ModelData::FloatKeyToFloatPos(_data) => panic!("as_int_int on float/float model data"),
+            ModelData::FloatKeyToIntPos(_data) => panic!("as_int_int on float/int model data"),
+            ModelData::IntKeyToFloatPos(_data) => panic!("as_int_int on int/float model data"),
+            ModelData::IntKeyToIntPos(data) => &data,
         };
     }
 
@@ -157,21 +217,21 @@ impl ModelData {
         };
     }
 
-    pub fn scale_targets_to(&mut self, max_val: u64, num_rows: usize) {
-        match self {
-            ModelData::FloatKeyToFloatPos(data) => scale_to_max!(max_val, num_rows, f64, data),
-            ModelData::FloatKeyToIntPos(data) => scale_to_max!(max_val, num_rows, u64, data),
-            ModelData::IntKeyToFloatPos(data) => scale_to_max!(max_val, num_rows, f64, data),
-            ModelData::IntKeyToIntPos(data) => scale_to_max!(max_val, num_rows, u64, data),
-        };
-    }
-
     pub fn get(&self, idx: usize) -> (f64, f64) {
         return match self {
             ModelData::FloatKeyToFloatPos(data) => data[idx],
             ModelData::FloatKeyToIntPos(data) => (data[idx].0, data[idx].1 as f64),
             ModelData::IntKeyToFloatPos(data) => (data[idx].0 as f64, data[idx].1),
             ModelData::IntKeyToIntPos(data) => (data[idx].0 as f64, data[idx].1 as f64),
+        };
+    }
+
+    pub fn get_key(&self, idx: usize) -> u64 {
+        return match self {
+            ModelData::FloatKeyToFloatPos(data) => data[idx].0 as u64,
+            ModelData::FloatKeyToIntPos(data) => data[idx].0 as u64, 
+            ModelData::IntKeyToFloatPos(data) => data[idx].0,
+            ModelData::IntKeyToIntPos(data) => data[idx].0
         };
     }
 }
@@ -433,7 +493,7 @@ pub enum ModelRestriction {
     MustBeBottom,
 }
 
-pub trait Model {
+pub trait Model: Sync + Send {
     fn predict_to_float(&self, inp: ModelInput) -> f64 {
         return self.predict_to_int(inp) as f64;
     }

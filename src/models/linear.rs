@@ -55,7 +55,7 @@ fn slr<T: Iterator<Item = (f64, f64)>>(loc_data: T) -> (f64, f64) {
     return (alpha, beta);
 }
 
-fn loglinear_slr(data: &ModelData) -> (f64, f64) {
+fn loglinear_slr(data: &ModelDataContainer) -> (f64, f64) {
     // log all of the outputs, omit any item that doesn't have a valid log
     let transformed_data: Vec<(f64, f64)> = data
         .iter_float_float()
@@ -74,7 +74,7 @@ pub struct LinearModel {
 }
 
 impl LinearModel {
-    pub fn new(data: &ModelData) -> LinearModel {
+    pub fn new(data: &ModelDataContainer) -> LinearModel {
         return LinearModel { params: slr(data.iter_float_float()) };
     }
 }
@@ -157,7 +157,7 @@ fn exp1(inp: f64) -> f64 {
 }
 
 impl LogLinearModel {
-    pub fn new(data: &ModelData) -> LogLinearModel {
+    pub fn new(data: &ModelDataContainer) -> LogLinearModel {
         return LogLinearModel {
             params: loglinear_slr(&data),
         };

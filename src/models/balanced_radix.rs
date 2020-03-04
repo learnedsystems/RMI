@@ -15,7 +15,7 @@ pub struct BalancedRadixModel {
     high: bool,
 }
 
-fn chi2(data: &ModelData, max_bin: u64, model: &BalancedRadixModel) -> f64 {
+fn chi2(data: &ModelDataContainer, max_bin: u64, model: &BalancedRadixModel) -> f64 {
     // compute the x^2 value of the distribution
     // induced by this model.
     let mut counts = vec![0; max_bin as usize];
@@ -32,7 +32,7 @@ fn chi2(data: &ModelData, max_bin: u64, model: &BalancedRadixModel) -> f64 {
         .sum();
 }
 
-fn bradix(data: &ModelData, max_output: u64) -> BalancedRadixModel {
+fn bradix(data: &ModelDataContainer, max_output: u64) -> BalancedRadixModel {
     let bits = num_bits(max_output);
     let common_prefix = common_prefix_size(data);
     trace!("Bradix layer common prefix: {}", common_prefix);
@@ -81,7 +81,7 @@ fn bradix(data: &ModelData, max_output: u64) -> BalancedRadixModel {
 }
 
 impl BalancedRadixModel {
-    pub fn new(data: &ModelData) -> BalancedRadixModel {
+    pub fn new(data: &ModelDataContainer) -> BalancedRadixModel {
         if data.len() == 0 {
             return BalancedRadixModel {
                 params: (0, 0, 0),

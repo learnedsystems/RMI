@@ -83,6 +83,23 @@ impl LayerParams {
         return Result::Ok(());
     }
 
+    fn requires_malloc(&self) -> bool {
+        if let LayerParams::Array(_, params) = self {
+            let array_size: usize = params.iter().map(|p| p.size()).sum();
+            return array_size >= 33554432;
+        }
+
+        return false;
+    }
+
+    fn pointer_type(&self) -> &'static str {
+        assert!(self.requires_malloc());
+        if let LayerParams::Array(_, params) = self {
+            return params[0].c_type();
+        }
+        panic!();
+    }
+    
     fn to_decl<T: Write>(&self, target: &mut T) -> Result<(), std::io::Error> {
         match self {
             LayerParams::Constant(_, _) => {
@@ -90,14 +107,23 @@ impl LayerParams {
             }
 
             LayerParams::Array(idx, params) => {
-                let num_items: usize = params.iter().map(|p| p.len()).sum();
-                writeln!(
-                    target,
-                    "{} {}[{}];",
-                    params[0].c_type(),
-                    array_name!(idx),
-                    num_items
-                )?;
+                if !self.requires_malloc()  {
+                    let num_items: usize = params.iter().map(|p| p.len()).sum();
+                    writeln!(
+                        target,
+                        "{} {}[{}];",
+                        params[0].c_type(),
+                        array_name!(idx),
+                        num_items
+                    )?;
+                } else { 
+                    writeln!(
+                        target,
+                        "{}* {};",
+                        params[0].c_type(),
+                        array_name!(idx)
+                    )?;
+                }
             }
         };
 
@@ -137,7 +163,8 @@ impl LayerParams {
             }
 
             LayerParams::Array(idx, _) => {
-                write!(target, "{}[{}]", array_name!(idx), parameter_index)?;
+                write!(target, "{}", array_name!(idx))?; // TODO we assume only 1 array param per layer
+                //write!(target, "{}[{}]", array_name!(idx), parameter_index)?;
             }
         };
 
@@ -168,8 +195,13 @@ impl LayerParams {
 
 fn params_for_layer(layer_idx: usize, models: &[Box<dyn Model>]) -> LayerParams {
     if models.len() == 1 {
+        // treat this data as constant, as long as it isn't too big.
         let params: Vec<ModelParam> = models[0].params();
-        return LayerParams::Constant(layer_idx, params);
+        let size: usize = params.iter().map(|mp| mp.size()).sum();
+
+        if size < 4096 {
+            return LayerParams::Constant(layer_idx, params);
+        }
     }
 
     // we have more than one model in this layer, so we need to make an array.
@@ -267,8 +299,8 @@ fn generate_code<T: Write>(
             
             for lp in layer_params.iter() {
                 match lp {
-                    // constants are still put directly in the header
-                    LayerParams::Constant(_, _) => lp.to_code(data_output)?,
+                    // constants are still put directly in the header 
+                    LayerParams::Constant(_idx, _) => lp.to_code(data_output)?,
                     
                     LayerParams::Array(idx, _) => {
                         let data_path = Path::new(&path).join(format!("{}_{}", namespace, array_name!(idx)));
@@ -281,6 +313,10 @@ fn generate_code<T: Write>(
                         read_code.push(format!("  {{"));
                         read_code.push(format!("    std::ifstream infile(std::filesystem::path(dataPath) / \"{ns}_{fn}\", std::ios::in | std::ios::binary);",
                                                ns=namespace, fn=array_name!(idx)));
+                        if lp.requires_malloc() {
+                            read_code.push(format!("    {} = ({}*) malloc({});",
+                                                   array_name!(idx), lp.pointer_type(), lp.size()));
+                        }
                         read_code.push(format!("    infile.read((char*){fn}, {size});",
                                                fn=array_name!(idx), size=lp.size()));
                         read_code.push(format!("  }}"));
@@ -291,6 +327,19 @@ fn generate_code<T: Write>(
 
         }
     };
+
+    let mut free_code = Vec::new();
+    free_code.push(format!("void cleanup() {{"));
+    // generate free code
+    for lp in layer_params.iter() {
+        if !lp.requires_malloc() { continue; }
+        if let LayerParams::Array(idx, _) = lp {
+            free_code.push(format!("    free({});", array_name!(idx)));
+            continue;
+        }
+        panic!();
+    }
+    free_code.push(format!("}}"));
 
     writeln!(data_output, "}} // namespace")?;
 
@@ -315,6 +364,10 @@ fn generate_code<T: Write>(
     writeln!(code_output, "namespace {} {{", namespace)?;
 
     for ln in read_code {
+        writeln!(code_output, "{}", ln)?;
+    }
+
+    for ln in free_code {
         writeln!(code_output, "{}", ln)?;
     }
     
@@ -447,6 +500,8 @@ inline size_t FCLAMP(double inp, double bound) {{
     if let StorageConf::Disk(_) = storage {
         writeln!(header_output, "void load(char const* dataPath);")?;
     }
+
+    writeln!(header_output, "void cleanup();")?;
 
     
     if !report_last_layer_errors {

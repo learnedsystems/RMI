@@ -13,7 +13,7 @@ pub struct RadixModel {
 }
 
 impl RadixModel {
-    pub fn new(data: &ModelData) -> RadixModel {
+    pub fn new(data: &ModelDataContainer) -> RadixModel {
         if data.len() == 0 {
             return RadixModel { params: (0, 0) };
         }
@@ -85,7 +85,7 @@ pub struct RadixTable {
 }
 
 impl RadixTable {
-    pub fn new(data: &ModelData, bits: u8) -> RadixTable {
+    pub fn new(data: &ModelDataContainer, bits: u8) -> RadixTable {
         let prefix = common_prefix_size(data);
         let mut hint_table: Vec<u32> = vec![0 ; 1 << bits];
 
@@ -135,14 +135,17 @@ impl Model for RadixTable {
     }
 
     fn params(&self) -> Vec<ModelParam> {
-        return vec![self.prefix_bits.into(), self.hint_table.clone().into()];
+        let mut new_params = self.hint_table.clone();
+        new_params.insert(0, self.prefix_bits as u32);
+        return vec![new_params.into()];
     }
 
     fn code(&self) -> String {
         return String::from(format!(
             "
-inline uint64_t radix_table(uint64_t prefix_length, uint32_t* table, uint64_t inp) {{
-    return table[((inp << prefix_length) >> prefix_length) >> (64 - {})];
+inline uint64_t radix_table(const uint32_t* table, const uint64_t inp) {{
+    uint32_t prefix_length = table[0];
+    return (table+1)[((inp << prefix_length) >> prefix_length) >> (64 - {})];
 }}", self.prefix_bits + self.table_bits
         ));
     }
