@@ -241,7 +241,7 @@ pub fn train(data: ModelData, model_spec: &str, branch_factor: u64) -> TrainedRM
         (all_models, last)
     };
 
-    if model_list.len() == 1 && branch_factor > 4096 {
+    if model_list.len() == 1 && data.len() > 1000000 {
         return train_two_layer(data, &model_list[0], &last_model, branch_factor);
     }
 
