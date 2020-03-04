@@ -7,6 +7,7 @@
 use crate::models::*;
 use log::*;
 use superslice::*;
+use rayon::prelude::*;
 
 pub struct TrainedRMI {
     pub model_avg_error: f64,
@@ -194,19 +195,29 @@ fn train_two_layer(data: ModelData,
     };
     
     info!("Computing last level errors...");
-    let mut last_layer_max_l1s = vec![0 ; num_leaf_models as usize];
-
 
     // evaluate model, compute last level errors
-    for (x, y) in md_container.iter_int_int() {
-        let leaf_idx = top_model.predict_to_int(x.into());
-        let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
-
-        let pred = leaf_models[target].predict_to_int(x.into());
-        let err = u64::max(y, pred) - u64::min(y, pred);
-        last_layer_max_l1s[target] = u64::max(last_layer_max_l1s[target], err);
-    }
-
+    let last_layer_max_l1s = md_container.as_int_int().par_iter()
+        .map(|&(x, y)| {
+            let leaf_idx = top_model.predict_to_int(x.into());
+            let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
+            
+            let pred = leaf_models[target].predict_to_int(x.into());
+            let err = u64::max(y, pred) - u64::min(y, pred);
+            (target, err)
+        }).fold(|| vec![0 ; num_leaf_models as usize],
+                |mut a: Vec<u64>, b: (usize, u64)| {
+                    a[b.0] = u64::max(b.1, a[b.0]);
+                    a
+                }
+        ).reduce(|| vec![0 ; num_leaf_models as usize],
+                 |v1, v2| {
+                     v1.iter().zip(v2.iter())
+                         .map(|(a, b)| u64::max(*a, *b))
+                         .collect()
+                 }
+        );
+                        
     info!("Evaluating two-layer RMI...");
     let (m_idx, m_err) = last_layer_max_l1s
         .iter().enumerate()
