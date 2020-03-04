@@ -95,8 +95,7 @@ fn build_models_from(data: &ModelDataContainer,
         assert!(top_model.needs_bounds_check() || model_pred < start_idx + num_models,
                 "Top model gave an index of {} which is out of bounds of {}",
                 model_pred, start_idx + num_models);
-        let target = usize::min(start_idx + num_models, model_pred);
-        
+        let target = usize::min(first_model_idx + num_models - 1, model_pred);
         assert!(target >= last_target);
         
         if target > last_target {
@@ -121,9 +120,11 @@ fn build_models_from(data: &ModelDataContainer,
     }
 
     // train the last remaining model
+    assert!(! second_layer_data.is_empty());
     let container = ModelDataContainer::new(ModelData::IntKeyToIntPos(second_layer_data));
     let leaf_model = train_model(model_type, &container);
     leaf_models.push(leaf_model);
+    assert!(leaf_models.len() <= num_models);
     
     // add models at the end with nothing mapped into them
     for _skipped_idx in (last_target+1)..(first_model_idx + num_models) as usize {
