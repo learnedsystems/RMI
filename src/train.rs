@@ -6,6 +6,7 @@
 // < end copyright >
 use crate::models::*;
 use log::*;
+use superslice::*;
 
 pub struct TrainedRMI {
     pub model_avg_error: f64,
@@ -69,33 +70,32 @@ fn validate(model_spec: &[String]) {
     }
 }
 
-fn train_two_layer(data: ModelData,
-                   layer1_model: &str, layer2_model: &str,
-                   num_leaf_models: u64) -> TrainedRMI {
-    validate(&[String::from(layer1_model), String::from(layer2_model)]);
 
-    let num_rows = data.len();
-    let mut md_container = ModelDataContainer::new(data);
+fn build_models_from(data: &ModelDataContainer,
+                     top_model: &Box<dyn Model>,
+                     model_type: &str,
+                     start_idx: usize, end_idx: usize,
+                     first_model_idx: usize,
+                     num_models: usize) -> Vec<Box<dyn Model>> {
 
-    let dummy_md = ModelDataContainer::new(ModelData::empty());
-
-    info!("Training top-level {} model layer", layer1_model);
-    md_container.set_scale(num_leaf_models as f64 / num_rows as f64);
-    let top_model = train_model(layer1_model, &md_container);
-    let mut leaf_models: Vec<Box<dyn Model>> = Vec::with_capacity(num_leaf_models as usize);
-
-    let mut second_layer_data = Vec::with_capacity(num_rows / num_leaf_models as usize);
-    let mut last_target = 0;
+    assert!(end_idx > start_idx);
+    assert!(end_idx <= data.len());
+    assert!(start_idx <= data.len());
     
-    info!("Training second-level {} model layer (num models = {})", layer2_model, num_leaf_models);
-    md_container.set_scale(1.0);
+    let dummy_md = ModelDataContainer::new(ModelData::empty());
+    let mut leaf_models: Vec<Box<dyn Model>> = Vec::with_capacity(num_models as usize);
+    let mut second_layer_data = Vec::with_capacity((end_idx - start_idx) / num_models as usize);
+    let mut last_target = first_model_idx;
 
-    for (x, y) in md_container.iter_int_int() {
-        let model_pred = top_model.predict_to_int(x.into());
-        assert!(top_model.needs_bounds_check() || model_pred < num_leaf_models,
-                "model produced result {} which is out of bounds with {} leaf models",
-                model_pred, num_leaf_models);
-        let target = u64::min(num_leaf_models - 1, model_pred) as usize;
+    let mut bounded_it = data.iter_int_int();
+    bounded_it.bound(start_idx, end_idx);
+        
+    for (x, y) in bounded_it {
+        let model_pred = top_model.predict_to_int(x.into()) as usize;
+        assert!(top_model.needs_bounds_check() || model_pred < start_idx + num_models,
+                "Top model gave an index of {} which is out of bounds of {}",
+                model_pred, start_idx + num_models);
+        let target = usize::min(start_idx + num_models, model_pred);
         
         assert!(target >= last_target);
         
@@ -103,15 +103,15 @@ fn train_two_layer(data: ModelData,
             // this is the first datapoint for the next leaf model.
             // train the previous leaf model.
             let container = ModelDataContainer::new(ModelData::IntKeyToIntPos(second_layer_data));
-            let leaf_model = train_model(layer2_model, &container);
+            let leaf_model = train_model(model_type, &container);
             leaf_models.push(leaf_model);
             
             
             // leave empty models for any we skipped.
             for _skipped_idx in (last_target+1)..target {
-                leaf_models.push(train_model(layer2_model, &dummy_md));
+                leaf_models.push(train_model(model_type, &dummy_md));
             }
-            assert_eq!(leaf_models.len(), target);
+            assert_eq!(leaf_models.len() + first_model_idx, target);
             
             second_layer_data = Vec::new();
         }
@@ -122,15 +122,66 @@ fn train_two_layer(data: ModelData,
 
     // train the last remaining model
     let container = ModelDataContainer::new(ModelData::IntKeyToIntPos(second_layer_data));
-    let leaf_model = train_model(layer2_model, &container);
+    let leaf_model = train_model(model_type, &container);
     leaf_models.push(leaf_model);
     
     // add models at the end with nothing mapped into them
-    for _skipped_idx in (last_target+1)..num_leaf_models as usize {
-        leaf_models.push(train_model(layer2_model, &dummy_md));
+    for _skipped_idx in (last_target+1)..(first_model_idx + num_models) as usize {
+        leaf_models.push(train_model(model_type, &dummy_md));
     }
-    assert_eq!(num_leaf_models as usize, leaf_models.len());
+    assert_eq!(num_models as usize, leaf_models.len());
+    return leaf_models;
+}
 
+fn train_two_layer(data: ModelData,
+                   layer1_model: &str, layer2_model: &str,
+                   num_leaf_models: u64) -> TrainedRMI {
+    validate(&[String::from(layer1_model), String::from(layer2_model)]);
+
+    let num_rows = data.len();
+    let mut md_container = ModelDataContainer::new(data);
+
+    info!("Training top-level {} model layer", layer1_model);
+    md_container.set_scale(num_leaf_models as f64 / num_rows as f64);
+    let top_model = train_model(layer1_model, &md_container);
+
+    info!("Training second-level {} model layer (num models = {})", layer2_model, num_leaf_models);
+    md_container.set_scale(1.0);
+
+    // find a prediction boundary near the middle
+    let midpoint_model = num_leaf_models / 2;
+    let split_idx = md_container.as_int_int().lower_bound_by(|x| {
+        let model_idx = top_model.predict_to_int(x.0.into());
+        let model_target = u64::min(num_leaf_models - 1, model_idx);
+        return model_target.cmp(&midpoint_model);
+    });
+
+    let split_idx_target = u64::min(num_leaf_models - 1,
+                                    top_model.predict_to_int(md_container.get_key(split_idx).into()))
+        as usize;
+    
+    info!("Split point found at index {}, which maps to model {}",
+          split_idx, split_idx_target);
+
+    let first_half_models = split_idx_target as usize;
+    info!("First half has {} models.", first_half_models);
+    let second_half_models = num_leaf_models as usize - split_idx_target as usize;
+    info!("Second half has {} models.", second_half_models);
+
+    let (mut hf1, mut hf2)
+        = rayon::join(|| build_models_from(&md_container, &top_model, layer2_model,
+                                           0, split_idx - 1,
+                                           0,
+                                           first_half_models),
+                      || build_models_from(&md_container, &top_model, layer2_model,
+                                           split_idx, md_container.len(),
+                                           split_idx_target,
+                                           second_half_models));
+
+    info!("Finished computing models, combining...");
+    let mut leaf_models = Vec::new();
+    leaf_models.append(&mut hf1);
+    leaf_models.append(&mut hf2);
 
     info!("Computing last level errors...");
     let mut last_layer_max_l1s = vec![0 ; num_leaf_models as usize];
@@ -180,7 +231,7 @@ pub fn train(data: ModelData, model_spec: &str, branch_factor: u64) -> TrainedRM
         (all_models, last)
     };
 
-    if model_list.len() == 1 {
+    if model_list.len() == 1 && branch_factor > 4096 {
         return train_two_layer(data, &model_list[0], &last_model, branch_factor);
     }
 

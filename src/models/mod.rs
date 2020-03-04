@@ -60,6 +60,10 @@ impl ModelDataContainer {
         return (x, y * self.scaling_factor);
     }
 
+    pub fn get_key(&self, idx: usize) -> u64 {
+        return self.model_data.get_key(idx);
+    }
+
     pub fn iter_float_float(&self) -> ModelDataFFIterator {
         let mut iter = self.model_data.iter_float_float();
         iter.set_scale(self.scaling_factor);
@@ -70,6 +74,10 @@ impl ModelDataContainer {
         let mut iter = self.model_data.iter_int_int();
         iter.set_scale(self.scaling_factor);
         return iter;
+    }
+
+    pub fn as_int_int(&self) -> &[(u64, u64)] {
+        return self.model_data.as_int_int();
     }
 }
 
@@ -105,16 +113,24 @@ macro_rules! define_iterator_type {
         pub struct $name<'a> {
             data: &'a ModelData,
             idx: usize,
-            scale: f64
+            scale: f64,
+            stop: usize
         }
 
         impl<'a> $name<'a> {
             fn new(data: &'a ModelData) -> $name<'a> {
-                return $name { data: data, idx: 0, scale: 1.0 };
+                return $name { data: data, idx: 0, scale: 1.0, stop: data.len() };
             }
 
             fn set_scale(&mut self, scale: f64) {
                 self.scale = scale;
+            }
+            #[allow(dead_code)]
+            pub fn bound(&mut self, start: usize, stop: usize) {
+                assert!(start < stop);
+                assert!(stop <= self.data.len());
+                self.idx = start;
+                self.stop = stop;
             }
         }
 
@@ -122,7 +138,7 @@ macro_rules! define_iterator_type {
             type Item = ($type1, $type2);
 
             fn next(&mut self) -> Option<Self::Item> {
-                if self.idx >= self.data.len() {
+                if self.idx >= self.stop {
                     return None;
                 }
 
@@ -174,12 +190,21 @@ impl ModelData {
     }
 
     #[cfg(test)]
-    fn as_int_int(self) -> Vec<(u64, u64)> {
+    fn into_int_int(self) -> Vec<(u64, u64)> {
         return match self {
             ModelData::FloatKeyToFloatPos(data) => vec_to_ii!(data),
             ModelData::FloatKeyToIntPos(data) => vec_to_ii!(data),
             ModelData::IntKeyToFloatPos(data) => vec_to_ii!(data),
             ModelData::IntKeyToIntPos(data) => data,
+        };
+    }
+
+    fn as_int_int(&self) -> &[(u64, u64)] {
+        return match self {
+            ModelData::FloatKeyToFloatPos(_data) => panic!("as_int_int on float/float model data"),
+            ModelData::FloatKeyToIntPos(_data) => panic!("as_int_int on float/int model data"),
+            ModelData::IntKeyToFloatPos(_data) => panic!("as_int_int on int/float model data"),
+            ModelData::IntKeyToIntPos(data) => &data,
         };
     }
 
@@ -198,6 +223,15 @@ impl ModelData {
             ModelData::FloatKeyToIntPos(data) => (data[idx].0, data[idx].1 as f64),
             ModelData::IntKeyToFloatPos(data) => (data[idx].0 as f64, data[idx].1),
             ModelData::IntKeyToIntPos(data) => (data[idx].0 as f64, data[idx].1 as f64),
+        };
+    }
+
+    pub fn get_key(&self, idx: usize) -> u64 {
+        return match self {
+            ModelData::FloatKeyToFloatPos(data) => data[idx].0 as u64,
+            ModelData::FloatKeyToIntPos(data) => data[idx].0 as u64, 
+            ModelData::IntKeyToFloatPos(data) => data[idx].0,
+            ModelData::IntKeyToIntPos(data) => data[idx].0
         };
     }
 }
