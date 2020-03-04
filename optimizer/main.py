@@ -17,12 +17,13 @@ RMI_PATH = "../target/release/rmi"
 RMI_CACHE_DIR = "/ssd1/ryan/rmi_cache"
 
 # define the model search space
-TOP_ONLY_LAYERS = ["radix", "bradix", "radix18", "radix22", "radix26"]
-ANYWHERE_LAYERS = ["linear", "cubic", "radix8"]
-SPECIALTY_TOP_LAYERS = ["histogram", "loglinear", "normal", "lognormal"]
+TOP_ONLY_LAYERS = ["radix", "radix18", "radix22"]
+ANYWHERE_LAYERS = ["linear", "cubic", "radix8", "linear_spline"]
+SPECIALTY_TOP_LAYERS = ["histogram", "loglinear", "normal", "lognormal", "bradix"]
 BRANCHING_FACTORS = list(int(x) for x in 2**np.arange(7, 22, 1))
 ALL_TOP_LAYERS = TOP_ONLY_LAYERS + ANYWHERE_LAYERS
 
+TRY_SPECIAL = False
 
 def sha(s):
     return hashlib.sha256(s.encode("UTF-8")).hexdigest()[-20:]
@@ -44,18 +45,19 @@ def build_initial_configs():
                 configs.append(params_to_rmi_config(layers, bf))
 
     # next, build a few tests to see if a speciality layer would help
-    for top in SPECIALTY_TOP_LAYERS:
-        if top == "histogram":
-            for bot in ANYWHERE_LAYERS:
-                for bf in [64, 128, 256]:
-                    layers = f"{top},{bot}"
-                    configs.append(params_to_rmi_config(layers, bf))
-        else:
-            # not a histogram
-            for bot in ANYWHERE_LAYERS:
-                for bf in BRANCHING_FACTORS[::4]:
-                    layers = f"{top},{bot}"
-                    configs.append(params_to_rmi_config(layers, bf))
+    if TRY_SPECIAL:
+        for top in SPECIALTY_TOP_LAYERS:
+            if top == "histogram":
+                for bot in ANYWHERE_LAYERS:
+                    for bf in [64, 128, 256]:
+                        layers = f"{top},{bot}"
+                        configs.append(params_to_rmi_config(layers, bf))
+            else:
+                # not a histogram
+                for bot in ANYWHERE_LAYERS:
+                    for bf in BRANCHING_FACTORS[::4]:
+                        layers = f"{top},{bot}"
+                        configs.append(params_to_rmi_config(layers, bf))
     return configs
 
 def build_configs_for_layers(candidate_layers, current_results):
@@ -133,7 +135,7 @@ def cache_rmi(data_path, result):
         json.dump(result, f)
 
     
-def parallel_test_rmis(data_path, configs, threads=12, phase=""):
+def parallel_test_rmis(data_path, configs, threads=4, phase=""):
     if len(configs) < threads:
         threads = len(configs)
 
@@ -476,4 +478,6 @@ def optimize(data_path):
     
 
 if __name__ == "__main__":
-    optimize("/home/ryan/SOSD-private/data/osm_cellids_200M_uint64")
+    #optimize("/home/ryan/SOSD-private/data/normal_400M_uint64")
+    #optimize("/home/ryan/SOSD-private/data/osm_cellids_400M_uint64")
+    optimize("/home/ryan/SOSD-private/data/books_200M_uint64")
