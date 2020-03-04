@@ -156,33 +156,42 @@ fn train_two_layer(data: ModelData,
         return model_target.cmp(&midpoint_model);
     });
 
-    let split_idx_target = u64::min(num_leaf_models - 1,
-                                    top_model.predict_to_int(md_container.get_key(split_idx).into()))
-        as usize;
+    let leaf_models = if split_idx >= md_container.len() {
+        warn!("All of the data is being mapped into less than half the number of leaf models. Parallelism disabled.");
+        build_models_from(&md_container, &top_model, layer2_model,
+                          0, md_container.len(), 0,
+                          num_leaf_models as usize)
+    } else {
     
-    info!("Split point found at index {}, which maps to model {}",
-          split_idx, split_idx_target);
+        let split_idx_target = u64::min(num_leaf_models - 1,
+                                        top_model.predict_to_int(md_container.get_key(split_idx).into()))
+            as usize;
+        
+        info!("Split point found at index {}, which maps to model {}",
+              split_idx, split_idx_target);
 
-    let first_half_models = split_idx_target as usize;
-    info!("First half has {} models.", first_half_models);
-    let second_half_models = num_leaf_models as usize - split_idx_target as usize;
-    info!("Second half has {} models.", second_half_models);
+        let first_half_models = split_idx_target as usize;
+        info!("First half has {} models.", first_half_models);
+        let second_half_models = num_leaf_models as usize - split_idx_target as usize;
+        info!("Second half has {} models.", second_half_models);
 
-    let (mut hf1, mut hf2)
-        = rayon::join(|| build_models_from(&md_container, &top_model, layer2_model,
-                                           0, split_idx - 1,
-                                           0,
-                                           first_half_models),
-                      || build_models_from(&md_container, &top_model, layer2_model,
-                                           split_idx, md_container.len(),
-                                           split_idx_target,
-                                           second_half_models));
+        let (mut hf1, mut hf2)
+            = rayon::join(|| build_models_from(&md_container, &top_model, layer2_model,
+                                               0, split_idx - 1,
+                                               0,
+                                               first_half_models),
+                          || build_models_from(&md_container, &top_model, layer2_model,
+                                               split_idx, md_container.len(),
+                                               split_idx_target,
+                                               second_half_models));
 
-    info!("Finished computing models, combining...");
-    let mut leaf_models = Vec::new();
-    leaf_models.append(&mut hf1);
-    leaf_models.append(&mut hf2);
-
+        info!("Finished computing models, combining...");
+        let mut leaf_models = Vec::new();
+        leaf_models.append(&mut hf1);
+        leaf_models.append(&mut hf2);
+        leaf_models
+    };
+    
     info!("Computing last level errors...");
     let mut last_layer_max_l1s = vec![0 ; num_leaf_models as usize];
 
