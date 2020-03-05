@@ -77,6 +77,10 @@ fn main() {
              .help("exports parameters to files in this directoyr instead of embedding them"))
         .get_matches();
 
+    // set the max number of threads to 4, otherwise Rayon goes crazy on larger machines
+    // and allocates too many workers for folds / reduces
+    rayon::ThreadPoolBuilder::new().num_threads(4).build_global().unwrap();
+    
     let fp = matches.value_of("input").unwrap();
     let downsample = matches
         .value_of("downsample")
