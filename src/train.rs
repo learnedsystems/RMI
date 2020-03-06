@@ -11,6 +11,7 @@ use rayon::prelude::*;
 
 pub struct TrainedRMI {
     pub model_avg_error: f64,
+    pub model_avg_l2_error: f64,
     pub model_avg_log2_error: f64,
     pub model_max_error: u64,
     pub model_max_error_idx: usize,
@@ -226,8 +227,13 @@ fn train_two_layer(data: ModelData,
     let model_max_error = *m_err;
     let model_max_error_idx = m_idx;
 
+    let num_errors = last_layer_max_l1s.len();
     let model_avg_error: f64 = last_layer_max_l1s
-        .iter().sum::<u64>() as f64 / last_layer_max_l1s.len() as f64;
+        .iter().sum::<u64>() as f64 / num_errors as f64;
+
+    let model_avg_l2_error: f64 = last_layer_max_l1s
+        .iter()
+        .map(|&x| (x as f64).powf(2.0) / num_errors as f64).sum::<f64>();
     
     let model_avg_log2_error: f64 =last_layer_max_l1s
         .iter().map(|&x| ((2*x + 2) as f64).log2()).sum::<f64>() / last_layer_max_l1s.len() as f64;
@@ -235,6 +241,7 @@ fn train_two_layer(data: ModelData,
     
     return TrainedRMI {
         model_avg_error,
+        model_avg_l2_error,
         model_avg_log2_error,
         model_max_error,
         model_max_error_idx,
@@ -303,6 +310,7 @@ pub fn train(data: ModelData, model_spec: &str, branch_factor: u64) -> TrainedRM
     let mut last_layer = Vec::new();
     let mut last_layer_max_l1s: Vec<u64> = Vec::new();
     let mut model_avg_error: f64 = 0.0;
+    let mut model_avg_l2_error: f64 = 0.0;
     let mut model_avg_log2_error: f64 = 0.0;
     let mut model_max_error = 0;
     let mut model_max_error_idx = 0;
@@ -327,6 +335,7 @@ but an error of {} was observed on input {} at index {}. Prediction: {} Actual: 
 
             max_error = u64::max(max_error, err);
             model_avg_error += ((max_error as f64) - model_avg_error) / (n as f64);
+            model_avg_l2_error += ((max_error as f64).powf(2.0) - model_avg_l2_error) / (n as f64);
             let log2_error = ((2 * max_error + 2) as f64).log2();
             model_avg_log2_error += (log2_error - model_avg_log2_error) / (n as f64);
             n += 1;
@@ -343,6 +352,7 @@ but an error of {} was observed on input {} at index {}. Prediction: {} Actual: 
 
     return TrainedRMI {
         model_avg_error,
+        model_avg_l2_error,
         model_avg_log2_error,
         model_max_error,
         model_max_error_idx,
