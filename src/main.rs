@@ -61,6 +61,9 @@ fn main() {
              .long("dump-ll-model-data")
              .value_name("model_index")
              .help("dump the data used to train the last-level model at index"))
+        .arg(Arg::with_name("dump-ll-errors")
+             .long("dump-ll-errors")
+             .help("dump the errors of each last-level model to ll_errors.json"))
         .arg(Arg::with_name("stats-file")
              .long("stats-file")
              .short("s")
@@ -153,6 +156,7 @@ fn main() {
                     "branching factor" => *branch_factor,
                     "average error" => trained_model.model_avg_error as f64,
                     "average error %" => trained_model.model_max_error as f64 / num_rows as f64 * 100.0,
+                    "average l2 error" => trained_model.model_avg_l2_error as f64,
                     "average log2 error" => trained_model.model_avg_log2_error,
                     "max error" => trained_model.model_max_error,
                     "max error %" => trained_model.model_max_error as f64 / num_rows as f64 * 100.0,
@@ -212,6 +216,10 @@ fn main() {
             trained_model.model_avg_error / num_rows as f64 * 100.0
         );
         info!(
+            "Average model L2 error: {}",
+            trained_model.model_avg_l2_error
+        );
+        info!(
             "Average model log2 error: {}",
             trained_model.model_avg_log2_error
         );
@@ -227,6 +235,7 @@ fn main() {
             Some(stats_fp) => {
                 let output = object! {
                     "average error" => trained_model.model_avg_error,
+                    "average l2 error" => trained_model.model_avg_l2_error,
                     "average log2 error" => trained_model.model_avg_log2_error,
                     "max error" => trained_model.model_max_error
                 };
@@ -235,6 +244,13 @@ fn main() {
                 let mut bw = BufWriter::new(f);
                 writeln!(bw, "{}", output.dump()).unwrap();
             }
+        }
+
+        if matches.is_present("dump-ll-errors") {
+            let output = object!{"last level errors" => trained_model.last_layer_max_l1s.clone() };
+            let f = File::create("ll_errors.json").expect("Could not write stats file");
+            let mut bw = BufWriter::new(f);
+            writeln!(bw, "{}", output.dump()).unwrap();
         }
         
         if !matches.is_present("no-code") {
