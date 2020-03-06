@@ -480,4 +480,4 @@ def optimize(data_path):
 if __name__ == "__main__":
     #optimize("/home/ryan/SOSD-private/data/normal_400M_uint64")
     #optimize("/home/ryan/SOSD-private/data/osm_cellids_400M_uint64")
-    optimize("/home/ryan/SOSD-private/data/wiki_ts_200M_uint64")
+    optimize("/home/ryan/SOSD-private/data/osm_cellids_200M_uint64")
