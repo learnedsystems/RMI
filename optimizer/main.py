@@ -135,7 +135,7 @@ def cache_rmi(data_path, result):
         json.dump(result, f)
 
     
-def parallel_test_rmis(data_path, configs, threads=4, phase=""):
+def parallel_test_rmis(data_path, configs, threads=8, phase=""):
     if len(configs) < threads:
         threads = len(configs)
 
@@ -480,4 +480,4 @@ def optimize(data_path):
 if __name__ == "__main__":
     #optimize("/home/ryan/SOSD-private/data/normal_400M_uint64")
     #optimize("/home/ryan/SOSD-private/data/osm_cellids_400M_uint64")
-    optimize("/home/ryan/SOSD-private/data/books_200M_uint64")
+    optimize("/home/ryan/SOSD-private/data/wiki_ts_200M_uint64")
