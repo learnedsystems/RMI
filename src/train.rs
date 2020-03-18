@@ -170,13 +170,9 @@ fn train_two_layer(data: ModelData,
                                         top_model.predict_to_int(md_container.get_key(split_idx).into()))
             as usize;
         
-        info!("Split point found at index {}, which maps to model {}",
-              split_idx, split_idx_target);
 
         let first_half_models = split_idx_target as usize;
-        info!("First half has {} models.", first_half_models);
         let second_half_models = num_leaf_models as usize - split_idx_target as usize;
-        info!("Second half has {} models.", second_half_models);
 
         let (mut hf1, mut hf2)
             = rayon::join(|| build_models_from(&md_container, &top_model, layer2_model,
@@ -188,7 +184,6 @@ fn train_two_layer(data: ModelData,
                                                split_idx_target,
                                                second_half_models));
 
-        info!("Finished computing models, combining...");
         let mut leaf_models = Vec::new();
         leaf_models.append(&mut hf1);
         leaf_models.append(&mut hf2);
@@ -235,7 +230,7 @@ fn train_two_layer(data: ModelData,
         .iter()
         .map(|&x| (x as f64).powf(2.0) / num_errors as f64).sum::<f64>();
     
-    let model_avg_log2_error: f64 =last_layer_max_l1s
+    let model_avg_log2_error: f64 = last_layer_max_l1s
         .iter().map(|&x| ((2*x + 2) as f64).log2()).sum::<f64>() / last_layer_max_l1s.len() as f64;
 
     

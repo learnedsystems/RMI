@@ -27,7 +27,6 @@ use indicatif::{ProgressBar, ProgressStyle};
 use clap::{App, Arg};
 
 fn main() {
-    let start_time = SystemTime::now();
     env_logger::init();
 
     let matches = App::new("RMI Learner")
@@ -104,12 +103,6 @@ fn main() {
         load_data(&fp, DataType::UINT32, downsample)
     };
     
-    let load_time = SystemTime::now()
-        .duration_since(start_time)
-        .map(|d| d.as_nanos())
-        .unwrap_or(std::u128::MAX);
-    info!("Data read time: {} ms", load_time / 1_000_000);
-
     if let Some(param_grid) = matches.value_of("param-grid").map(|x| x.to_string()) {
         let pg = {
             let raw_json = fs::read_to_string(param_grid.clone()).unwrap();
@@ -147,8 +140,13 @@ fn main() {
                 trace!("Training RMI {} with branching factor {}", models, *branch_factor);
                 
                 // TODO this copy should not be required
+                let start_time = SystemTime::now();
                 let trained_model = train(data.clone(), models, *branch_factor);
-                
+                let build_time = SystemTime::now()
+                    .duration_since(start_time)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(std::u128::MAX);
+
                 let size_bs = codegen::rmi_size(&trained_model.rmi, true);
                 let size_ls = codegen::rmi_size(&trained_model.rmi, false);
                 results.push(object! {
@@ -172,7 +170,7 @@ fn main() {
                         *bsearch,
                         trained_model,
                         num_rows,
-                        0,
+                        build_time,
                         data_dir).unwrap();
 
                 }
@@ -192,18 +190,15 @@ fn main() {
     } else if matches.value_of("namespace").is_some() {
         let namespace = matches.value_of("namespace").unwrap().to_string();
         let models = matches.value_of("models").unwrap();
-        
         let branch_factor = matches
             .value_of("branching factor")
             .unwrap()
             .parse::<u64>()
             .unwrap();
-        
-       
-        
         let last_layer_errors = matches.is_present("last-layer-errors");
-        let trained_model = train(data, models, branch_factor);
         
+        let start_time = SystemTime::now();
+        let trained_model = train(data, models, branch_factor);
         let build_time = SystemTime::now()
             .duration_since(start_time)
             .map(|d| d.as_nanos())
