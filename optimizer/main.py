@@ -480,4 +480,20 @@ def optimize(data_path):
 if __name__ == "__main__":
     #optimize("/home/ryan/SOSD-private/data/normal_400M_uint64")
     #optimize("/home/ryan/SOSD-private/data/osm_cellids_400M_uint64")
-    optimize("/home/ryan/SOSD-private/data/osm_cellids_200M_uint64")
+    
+    #optimize("/home/ryan/SOSD-private/data/osm_cellids_200M_uint64")
+    #os.system("mv step2_out.csv osm.csv")
+    # 
+    #optimize("/home/ryan/SOSD-private/data/books_200M_uint64")
+    #os.system("mv step2_out.csv books.csv")
+    # 
+    #optimize("/home/ryan/SOSD-private/data/wiki_ts_200M_uint64")
+    #os.system("mv step2_out.csv wiki.csv")
+    # 
+    #optimize("/home/ryan/SOSD-private/data/fb_200M_uint64")
+    #os.system("mv step2_out.csv fb.csv")
+
+    optimize("/home/ryan/SOSD-private/data/lognormal_200M_uint64")
+
+
+
