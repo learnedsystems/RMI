@@ -192,6 +192,8 @@ fn train_two_layer(data: ModelData,
     
     info!("Computing last level errors...");
 
+    // TODO compute the total number of items that each each LL model
+    
     // evaluate model, compute last level errors
     let last_layer_max_l1s = md_container.as_int_int().par_iter()
         .map(|&(x, y)| {
@@ -201,15 +203,19 @@ fn train_two_layer(data: ModelData,
             let pred = leaf_models[target].predict_to_int(x.into());
             let err = u64::max(y, pred) - u64::min(y, pred);
             (target, err)
-        }).fold(|| vec![0 ; num_leaf_models as usize],
-                |mut a: Vec<u64>, b: (usize, u64)| {
-                    a[b.0] = u64::max(b.1, a[b.0]);
+        }).fold(|| vec![(0, 0) ; num_leaf_models as usize],
+                |mut a: Vec<(u64, u64)>, b: (usize, u64)| {
+                    let model_idx = b.0;
+                    let err = b.1;
+                    let current = a[model_idx];
+                    a[model_idx] = (current.0 + 1,
+                              u64::max(err, current.1));
                     a
                 }
-        ).reduce(|| vec![0 ; num_leaf_models as usize],
+        ).reduce(|| vec![(0, 0) ; num_leaf_models as usize],
                  |v1, v2| {
                      v1.iter().zip(v2.iter())
-                         .map(|(a, b)| u64::max(*a, *b))
+                         .map(|(a, b)| (a.0 + b.0, u64::max(a.1, b.1)))
                          .collect()
                  }
         );
@@ -217,22 +223,23 @@ fn train_two_layer(data: ModelData,
     info!("Evaluating two-layer RMI...");
     let (m_idx, m_err) = last_layer_max_l1s
         .iter().enumerate()
-        .max_by_key(|(_idx, &x)| x).unwrap();
+        .max_by_key(|(_idx, &x)| x.1).unwrap();
     
-    let model_max_error = *m_err;
+    let model_max_error = m_err.1;
     let model_max_error_idx = m_idx;
 
-    let num_errors = last_layer_max_l1s.len();
     let model_avg_error: f64 = last_layer_max_l1s
-        .iter().sum::<u64>() as f64 / num_errors as f64;
+        .iter().map(|(n, err)| n * err).sum::<u64>() as f64 / num_rows as f64;
 
     let model_avg_l2_error: f64 = last_layer_max_l1s
         .iter()
-        .map(|&x| (x as f64).powf(2.0) / num_errors as f64).sum::<f64>();
+        .map(|(n, err)| ((n*err) as f64).powf(2.0) / num_rows as f64).sum::<f64>();
     
     let model_avg_log2_error: f64 = last_layer_max_l1s
-        .iter().map(|&x| ((2*x + 2) as f64).log2()).sum::<f64>() / last_layer_max_l1s.len() as f64;
+        .iter().map(|(n, err)| (*n as f64)*((2*err + 2) as f64).log2()).sum::<f64>() / num_rows as f64;
 
+    let final_errors = last_layer_max_l1s.into_iter()
+        .map(|(_n, err)| err).collect();
     
     return TrainedRMI {
         model_avg_error,
@@ -240,7 +247,7 @@ fn train_two_layer(data: ModelData,
         model_avg_log2_error,
         model_max_error,
         model_max_error_idx,
-        last_layer_max_l1s,
+        last_layer_max_l1s: final_errors,
         rmi: vec![vec![top_model], leaf_models]
     };
 
