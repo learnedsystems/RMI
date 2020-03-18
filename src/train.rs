@@ -209,7 +209,7 @@ fn train_two_layer(data: ModelData,
                     let err = b.1;
                     let current = a[model_idx];
                     a[model_idx] = (current.0 + 1,
-                              u64::max(err, current.1));
+                                    u64::max(err, current.1));
                     a
                 }
         ).reduce(|| vec![(0, 0) ; num_leaf_models as usize],
@@ -240,6 +240,7 @@ fn train_two_layer(data: ModelData,
 
     let final_errors = last_layer_max_l1s.into_iter()
         .map(|(_n, err)| err).collect();
+
     
     return TrainedRMI {
         model_avg_error,
