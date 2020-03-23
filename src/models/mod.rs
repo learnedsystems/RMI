@@ -283,7 +283,7 @@ impl ModelDataType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ModelParam {
     Int(u64),
     Float(f64),
