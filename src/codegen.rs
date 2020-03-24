@@ -56,7 +56,8 @@ impl LayerParams {
             return LayerParams::MixedArray(idx, params_per_model, params);
         }
 
-        if array_access || params.len() > 4096 {
+        let param_size_bytes: usize = params.iter().map(|p| p.size()).sum();
+        if array_access || param_size_bytes > 4096 {
             return LayerParams::Array(idx, params_per_model, params);
         }
 
