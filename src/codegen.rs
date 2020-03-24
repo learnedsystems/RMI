@@ -233,6 +233,14 @@ impl LayerParams {
         model_index: &str,
         parameter_index: usize
     ) -> Result<(), std::io::Error> {
+
+        if self.params()[0].is_array() {
+            assert_eq!(self.params().len(), 1,
+                       "Layer params with array had more than one member.");
+            write!(target, "{}", array_name!(self.index()))?;
+            return Result::Ok(());
+        }
+        
         match self {
             LayerParams::Constant(idx, _) => {
                 panic!(
@@ -241,7 +249,10 @@ impl LayerParams {
                 );
             }
 
-            LayerParams::Array(idx, params_per_model, _) => {
+            LayerParams::Array(idx, params_per_model, params) => {
+                if params[0].is_array() {
+                    assert_eq!(params.len(), 1);
+                }
                 let expr = format!("{}*{} + {}",
                                    params_per_model, model_index, parameter_index);
                 write!(target, "{}[{}]", array_name!(idx), expr)?;

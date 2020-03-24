@@ -317,6 +317,17 @@ impl ModelParam {
         }
     }
 
+    pub fn is_array(&self) -> bool {
+        match self {
+            ModelParam::Int(_) => false,
+            ModelParam::Float(_) => false,
+            ModelParam::ShortArray(_) => true,
+            ModelParam::IntArray(_) => true,
+            ModelParam::Int32Array(_) => true,
+            ModelParam::FloatArray(_) => true
+        }
+    }
+
     pub fn c_type_mod(&self) -> &'static str {
         match self {
             ModelParam::Int(_) => "",
