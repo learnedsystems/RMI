@@ -15,6 +15,7 @@ use crate::train::TrainedRMI;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
+use std::fmt;
 
 
 enum StorageConf {
@@ -24,7 +25,8 @@ enum StorageConf {
 
 enum LayerParams {
     Constant(usize, Vec<ModelParam>),
-    Array(usize, Vec<ModelParam>),
+    Array(usize, usize, Vec<ModelParam>),
+    MixedArray(usize, usize, Vec<ModelParam>)
 }
 
 macro_rules! constant_name {
@@ -34,20 +36,34 @@ macro_rules! constant_name {
 }
 
 
-// slight hack here -- special-case index 9999 to be the model
-// error parameters (if you have a 9999 layer RMI, something else is wrong).
-const MODEL_ERROR_MAGIC_NUM: usize = 9999;
 macro_rules! array_name {
     ($layer: expr) => {
-        if $layer == &MODEL_ERROR_MAGIC_NUM {
-            format!("errors")
-        } else {
-            format!("L{}_PARAMETERS", $layer)
-        }
-    };
+        format!("L{}_PARAMETERS", $layer)
+    }
 }
 
-impl LayerParams {    
+impl LayerParams {
+
+    fn new(idx: usize,
+           array_access: bool,
+           params_per_model: usize,
+           params: Vec<ModelParam>) -> LayerParams {
+        // first, if the underlying data is mixed, we can only support array mode.
+        let first_param = params.first().unwrap();
+        let mixed = !params.iter().all(|p| first_param.is_same_type(p));
+
+        if mixed {
+            return LayerParams::MixedArray(idx, params_per_model, params);
+        }
+
+        let param_size_bytes: usize = params.iter().map(|p| p.size()).sum();
+        if array_access || param_size_bytes > 4096 {
+            return LayerParams::Array(idx, params_per_model, params);
+        }
+
+        return LayerParams::Constant(idx, params);
+    }
+    
     fn to_code<T: Write>(&self, target: &mut T) -> Result<(), std::io::Error> {
         match self {
             LayerParams::Constant(idx, params) => {
@@ -63,7 +79,7 @@ impl LayerParams {
                 }
             }
 
-            LayerParams::Array(idx, params) => {
+            LayerParams::Array(idx, _, params) => {
                 write!(
                     target,
                     "const {} {}[] = {{",
@@ -77,6 +93,10 @@ impl LayerParams {
                 }
                 write!(target, "{}", last.c_val())?;
                 writeln!(target, "}};")?;
+            },
+
+            LayerParams::MixedArray(_, _, _) => {
+                panic!("Cannot hardcode mixed array.");
             }
         };
 
@@ -84,20 +104,23 @@ impl LayerParams {
     }
 
     fn requires_malloc(&self) -> bool {
-        if let LayerParams::Array(_, params) = self {
-            let array_size: usize = params.iter().map(|p| p.size()).sum();
-            return array_size >= 33554432;
-        }
-
-        return false;
+        return match self {
+            LayerParams::Array(_, _, params) => {
+                let array_size: usize = params.iter().map(|p| p.size()).sum();
+                return array_size >= 4 * 1024;
+            },
+            LayerParams::MixedArray(_, _, _) => true,
+            LayerParams::Constant(_, _) => false,
+        }; 
     }
 
     fn pointer_type(&self) -> &'static str {
         assert!(self.requires_malloc());
-        if let LayerParams::Array(_, params) = self {
-            return params[0].c_type();
-        }
-        panic!();
+        return match self {
+            LayerParams::Array(_, _, params) => params[0].c_type(),
+            LayerParams::MixedArray(_, _, _) => "char",
+            LayerParams::Constant(_, _) => panic!("No pointer type for constant params")
+        };
     }
     
     fn to_decl<T: Write>(&self, target: &mut T) -> Result<(), std::io::Error> {
@@ -106,7 +129,7 @@ impl LayerParams {
                 panic!("Cannot forward-declare constants");
             }
 
-            LayerParams::Array(idx, params) => {
+            LayerParams::Array(idx, _, params) => {
                 if !self.requires_malloc()  {
                     let num_items: usize = params.iter().map(|p| p.len()).sum();
                     writeln!(
@@ -124,6 +147,15 @@ impl LayerParams {
                         array_name!(idx)
                     )?;
                 }
+            },
+
+            LayerParams::MixedArray(idx, _, _) => {
+                assert!(self.requires_malloc());
+                writeln!(
+                    target,
+                    "char* {};",
+                    array_name!(idx)
+                )?;
             }
         };
 
@@ -132,50 +164,83 @@ impl LayerParams {
 
 
     fn write_to<T: Write>(&self, target: &mut T) -> Result<(), std::io::Error> {
-        if let LayerParams::Array(_idx, params) = self {
-            let (first, rest) = params.split_first().unwrap();
+        match self {   
+            LayerParams::Array(_idx, _, params) |
+            LayerParams::MixedArray(_idx, _, params) => {
+                let (first, rest) = params.split_first().unwrap();
 
-            first.write_to(target)?;
-            for itm in rest {
-                assert!(first.is_same_type(itm));
-                itm.write_to(target)?;
-            }
-            return Ok(());
-        }
-        panic!("Cannot write constant parameters to binary file.");
+                first.write_to(target)?;
+                for itm in rest {
+                    if let LayerParams::Array(_, _, _) = self {
+                        assert!(first.is_same_type(itm));
+                    }
+                    itm.write_to(target)?;
+                }
+                return Ok(());
+            },
+            LayerParams::Constant(_, _) =>
+                panic!("Cannot write constant parameters to binary file.")
+        };
+    }
+
+    fn params(&self) -> &[ModelParam] {
+        return match self {
+            LayerParams::Array(_, _, params) |
+            LayerParams::MixedArray(_, _, params)
+                => params,
+            LayerParams::Constant(_, params) => params
+        };
+    }
+
+    fn index(&self) -> usize {
+        return match self {
+            LayerParams::Array(idx, _, _) |
+            LayerParams::MixedArray(idx, _, _)
+                => *idx,
+            LayerParams::Constant(idx, _) => *idx
+        };
+    }
+
+    fn params_per_model(&self) -> usize {
+        return match self {
+            LayerParams::Array(_idx, ppm, _params) |
+            LayerParams::MixedArray(_idx, ppm, _params)
+                => *ppm,
+            LayerParams::Constant(_, params) => params.len()
+        };
     }
 
     fn size(&self) -> usize {
-        match self {
-            LayerParams::Array(_, params) => params.iter().map(|p| p.size()).sum(),
-            LayerParams::Constant(_, params) => params.iter().map(|p| p.size()).sum()
-        }
+        return self.params().iter().map(|p| p.size()).sum();
     }
+
 
     fn access_by_const<T: Write>(
         &self,
         target: &mut T,
         parameter_index: usize,
     ) -> Result<(), std::io::Error> {
-        match self {
-            LayerParams::Constant(idx, _) => {
-                write!(target, "{}", constant_name!(idx, parameter_index))?;
-            }
-
-            LayerParams::Array(idx, _) => {
-                write!(target, "{}", array_name!(idx))?; // TODO we assume only 1 array param per layer
-                //write!(target, "{}[{}]", array_name!(idx), parameter_index)?;
-            }
-        };
-
-        return Result::Ok(());
+        if let LayerParams::Constant(idx, _) = self {
+            write!(target, "{}", constant_name!(idx, parameter_index))?;
+            return Result::Ok(());
+        }
+        return self.access_by_ref(target, "0", parameter_index);
     }
 
     fn access_by_ref<T: Write>(
         &self,
         target: &mut T,
-        parameter_index: &str,
+        model_index: &str,
+        parameter_index: usize
     ) -> Result<(), std::io::Error> {
+
+        if self.params()[0].is_array() {
+            assert_eq!(self.params().len(), 1,
+                       "Layer params with array had more than one member.");
+            write!(target, "{}", array_name!(self.index()))?;
+            return Result::Ok(());
+        }
+        
         match self {
             LayerParams::Constant(idx, _) => {
                 panic!(
@@ -184,29 +249,98 @@ impl LayerParams {
                 );
             }
 
-            LayerParams::Array(idx, _) => {
-                write!(target, "{}[{}]", array_name!(idx), parameter_index)?;
+            LayerParams::Array(idx, params_per_model, params) => {
+                if params[0].is_array() {
+                    assert_eq!(params.len(), 1);
+                }
+                let expr = format!("{}*{} + {}",
+                                   params_per_model, model_index, parameter_index);
+                write!(target, "{}[{}]", array_name!(idx), expr)?;
+            },
+
+            LayerParams::MixedArray(idx, params_per_model, params) => {
+                // determine the number of bytes for each model
+                let mut bytes_per_model = 0;
+                for pidx in 0..*params_per_model {
+                    bytes_per_model += params[pidx].size();
+                }
+                // determine the byte offset of this parameter
+                let mut offset = 0;
+                for pidx in 0..parameter_index {
+                    offset += params[pidx].size();
+                }
+                
+                // we have to determine the type of the index being accessed
+                // and add the appropiate cast.
+                let c_type = params[parameter_index].c_type();
+                let ptr_expr = format!("{} + ({} * {}) + {}",
+                                       array_name!(idx),
+                                       model_index, bytes_per_model,
+                                       offset);
+                                       
+                write!(target, "*(({new_type}*) ({ptr_expr}))",
+                       new_type=c_type, ptr_expr=ptr_expr)?;
+                
             }
         };
 
         return Result::Ok(());
     }
+
+    fn with_zipped_errors(&self, lle: Vec<u64>) -> LayerParams {
+        
+        let params = self.params();
+        // integrate the errors into the model parameters of the last
+        // layer to save a cache miss.
+        
+        // TODO we should add padding to make sure each of these are
+        // cache-aligned. Also a lot of unneeded copying going on here...
+        let combined_lle_params: Vec<ModelParam> =
+            params.chunks(self.params_per_model())
+            .zip(lle)
+            .flat_map(|(mod_params, err)| {
+                let mut to_r: Vec<ModelParam> = Vec::new();
+                to_r.extend_from_slice(mod_params);
+                to_r.push(ModelParam::Int(err));
+                to_r
+            }).collect();
+
+        let is_constant = if let LayerParams::Constant(_, _) = self {
+            true
+        } else {
+            false
+        };
+        
+        return LayerParams::new(self.index(), is_constant, self.params_per_model() + 1,
+                                combined_lle_params);
+                                
+    }
+}
+
+impl fmt::Display for LayerParams {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LayerParams::Constant(idx, params) =>
+                write!(f, "Constant(idx: {}, len: {}, malloc: {})",
+                       idx, params.len(), self.requires_malloc()),
+            LayerParams::Array(idx, ppm, params) =>
+                write!(f, "Array(idx: {}, ppm: {}, len: {}, malloc: {})",
+                       idx, ppm, params.len(), self.requires_malloc()),
+            LayerParams::MixedArray(idx, ppm, params) =>
+                write!(f, "MixedArray(idx: {}, ppm: {}, len: {}, malloc: {})",
+                       idx, ppm, params.len(), self.requires_malloc())
+                
+        }
+    }
 }
 
 fn params_for_layer(layer_idx: usize, models: &[Box<dyn Model>]) -> LayerParams {
-    if models.len() == 1 {
-        // treat this data as constant, as long as it isn't too big.
-        let params: Vec<ModelParam> = models[0].params();
-        let size: usize = params.iter().map(|mp| mp.size()).sum();
-
-        if size < 4096 {
-            return LayerParams::Constant(layer_idx, params);
-        }
-    }
-
-    // we have more than one model in this layer, so we need to make an array.
+    let params_per_model = models[0].params().len();
     let params = models.iter().flat_map(|m| m.params()).collect();
-    return LayerParams::Array(layer_idx, params);
+    return LayerParams::new(layer_idx,
+                            models.len() > 1, // array access on non-singleton layers
+                            params_per_model,
+                            params);
 }
 
 macro_rules! model_index_from_output {
@@ -264,22 +398,33 @@ fn generate_code<T: Write>(
         .enumerate()
         .map(|(layer_idx, models)| params_for_layer(layer_idx, models))
         .collect();
-
+    
     let report_last_layer_errors = last_layer_errors.is_some();
 
-    let mut report_lle = String::new();
+    let mut report_lle: Vec<u8> = Vec::new();
     if report_last_layer_errors {
         if let Some(lle) = last_layer_errors {
             assert!(!lle.is_empty());
             if lle.len() > 1 {
-                report_lle = String::from("  *err = errors[modelIndex];");
+                let old_last = layer_params.pop().unwrap();
+                let new_last = old_last.with_zipped_errors(lle);
+
+                write!(report_lle, "  *err = ")?;
+                new_last.access_by_ref(&mut report_lle, "modelIndex",
+                                       new_last.params_per_model() - 1)?;
+                writeln!(report_lle, ";")?;
+                
+                layer_params.push(new_last);
+
             } else {
-                report_lle = format!("  *err = {};", lle[0]);
+                write!(report_lle, "  *err = {};", lle[0])?;
             }
-            
-            layer_params.push(LayerParams::Array(MODEL_ERROR_MAGIC_NUM,
-                                                 vec![ModelParam::IntArray(lle)]));
         }
+    }
+
+    trace!("Layer parameters:");
+    for lps in layer_params.iter() {
+        trace!("{}", lps);
     }
 
     writeln!(data_output, "namespace {} {{", namespace)?;    
@@ -302,7 +447,8 @@ fn generate_code<T: Write>(
                     // constants are still put directly in the header 
                     LayerParams::Constant(_idx, _) => lp.to_code(data_output)?,
                     
-                    LayerParams::Array(idx, _) => {
+                    LayerParams::Array(idx, _, _) |
+                    LayerParams::MixedArray(idx, _, _) => {
                         let data_path = Path::new(&path).join(format!("{}_{}", namespace, array_name!(idx)));
                         let f = File::create(data_path).expect("Could not write data file");
                         let mut bw = BufWriter::new(f);
@@ -333,7 +479,7 @@ fn generate_code<T: Write>(
     // generate free code
     for lp in layer_params.iter() {
         if !lp.requires_malloc() { continue; }
-        if let LayerParams::Array(idx, _) = lp {
+        if let LayerParams::Array(idx, _, _) | LayerParams::MixedArray(idx, _, _) = lp {
             free_code.push(format!("    free({});", array_name!(idx)));
             continue;
         }
@@ -470,8 +616,7 @@ inline size_t FCLAMP(double inp, double bound) {{
             )?;
 
             for pidx in 0..num_parameters {
-                let expr = format!("{}*modelIndex + {}", num_parameters, pidx);
-                layer_param.access_by_ref(code_output, expr.as_str())?;
+                layer_param.access_by_ref(code_output, "modelIndex", pidx)?;
                 write!(code_output, ", ")?;
             }
         }
@@ -481,7 +626,7 @@ inline size_t FCLAMP(double inp, double bound) {{
         needs_bounds_check = layer[0].needs_bounds_check();
     }
 
-    writeln!(code_output, "{}", report_lle)?;
+    writeln!(code_output, "{}", str::from_utf8(&report_lle).unwrap())?;
 
     writeln!(
         code_output,
