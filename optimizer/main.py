@@ -17,8 +17,8 @@ RMI_PATH = "../target/release/rmi"
 RMI_CACHE_DIR = "/ssd1/ryan/rmi_cache"
 
 # define the model search space
-TOP_ONLY_LAYERS = ["radix", "radix18", "radix22"]
-ANYWHERE_LAYERS = ["linear", "cubic", "radix8", "linear_spline"]
+TOP_ONLY_LAYERS = ["radix", "radix18", "radix22", "radix26"]
+ANYWHERE_LAYERS = ["linear", "cubic", "linear_spline"]
 SPECIALTY_TOP_LAYERS = ["histogram", "loglinear", "normal", "lognormal", "bradix"]
 BRANCHING_FACTORS = list(int(x) for x in 2**np.arange(7, 22, 1))
 ALL_TOP_LAYERS = TOP_ONLY_LAYERS + ANYWHERE_LAYERS
@@ -348,14 +348,15 @@ def measure_rmis(data_path, configs):
             
     return all_times
 
-def optimize(data_path):
+def optimize(data_path, threads=16):
 
     print("Compiling RMI learner...")
     os.system("cd .. && cargo build --release")
 
     initial_configs = build_initial_configs()
     print("Testing", len(initial_configs), "initial configurations.")
-    step1_results = parallel_test_rmis(data_path, initial_configs, phase="step1")
+    step1_results = parallel_test_rmis(data_path, initial_configs, phase="step1",
+                                       threads=threads)
     step1_results = pd.DataFrame(step1_results)
 
     # measure inference time
@@ -382,7 +383,8 @@ def optimize(data_path):
     step2_configs = build_configs_for_layers(candidate_layers, step1_results)
 
     print("Testing", len(step2_configs), "additional configurations in step 2")
-    step2_results = parallel_test_rmis(data_path, step2_configs, phase="step2")
+    step2_results = parallel_test_rmis(data_path, step2_configs, phase="step2",
+                                       threads=threads)
     step2_results = pd.DataFrame(step2_results)
 
     # measure inference time
@@ -412,86 +414,108 @@ def optimize(data_path):
 
 
     return
-    step3_configs = []
-    for _idx, row in pareto_results.iterrows():
-        step3_configs.append(row.to_dict())
-
-    print("Step 3 begins with", len(step3_configs), "models from the fronts of step 1 and 2")
-    step3_results = parallel_test_rmis(data_path, step3_configs, phase="step3")
-    step3_times = measure_rmis(data_path, step3_results)
-    step3_results = pd.DataFrame(step3_results)
-    step3_results["measured"] = step3_times
-
-    # check for any failures
-    failed_mask = step3_results["measured"].isna()
-    for _, row in step3_results[failed_mask][["layers", "branching factor"]].iterrows():
-        print("RMI failure:", row)
-
-    print("At the end of step 3, we have evaluated", len(step3_results), "models")
-
-    
-    # expand on the front
-    mask = pareto_mask(step3_results, props=["size binary search", "measured"], ignore_star=True)
-    front = step3_results[mask]
-    print("After step 3, there are", len(front), "models on the front")
-
-    cpy = step3_results.copy()
-    cpy["front"] = mask
-    cpy.to_csv("step3_out.csv", index=False)
-    del cpy
-    
-    step4_configs = []
-    for _idx, row in front.iterrows():
-        layers = row["layers"]
-        bf = row["branching factor"]
-        config = params_to_rmi_config(layers, int(bf * 1.5))
-        
-        assert row["binary"] # remove this if we ever search linear RMIs
-        config["binary"] = row["binary"]
-        step4_configs.append(config)
-
-        config = params_to_rmi_config(layers, int(bf * 0.5))
-        config["binary"] = row["binary"]
-        step4_configs.append(config)
-
-    print("Expanding the front, searching", len(step4_configs), "additional models")
-    step4_results = parallel_test_rmis(data_path, step4_configs, phase="step4")
-    step4_times = measure_rmis(data_path, step4_results)
-    step4_results = pd.DataFrame(step4_results)
-    step4_results["measured"] = step4_times
-    print("Got results for", len(step4_results), "additional models")
-
-    # compute sizes
-    results = pd.concat((step3_results, step4_results), sort=False).reset_index(drop=True)
-    print("Final number of models evaluated:", len(results))
-    mask = pareto_mask(results, props=["size linear search", "measured"], ignore_star=True)
-    print("Size of front:", sum(mask))
-    results["size"] = results["size binary search"]
-    results["front"] = mask
-    results[
-        ["layers", "branching factor", "size",
-         "average error", "average log2 error", "max error",
-         "binary", "front", "measured"]
-    ].sort_values("measured").to_csv("step4_out.csv", index=False)
-    print("Results saved to step4_out.csv")
-    os.system("cat step4_out.csv")
+    #step3_configs = []
+    #for _idx, row in pareto_results.iterrows():
+    #    step3_configs.append(row.to_dict())
+    # 
+    #print("Step 3 begins with", len(step3_configs), "models from the fronts of step 1 and 2")
+    #step3_results = parallel_test_rmis(data_path, step3_configs, phase="step3")
+    #step3_times = measure_rmis(data_path, step3_results)
+    #step3_results = pd.DataFrame(step3_results)
+    #step3_results["measured"] = step3_times
+    # 
+    ## check for any failures
+    #failed_mask = step3_results["measured"].isna()
+    #for _, row in step3_results[failed_mask][["layers", "branching factor"]].iterrows():
+    #    print("RMI failure:", row)
+    # 
+    #print("At the end of step 3, we have evaluated", len(step3_results), "models")
+    # 
+    # 
+    ## expand on the front
+    #mask = pareto_mask(step3_results, props=["size binary search", "measured"], ignore_star=True)
+    #front = step3_results[mask]
+    #print("After step 3, there are", len(front), "models on the front")
+    # 
+    #cpy = step3_results.copy()
+    #cpy["front"] = mask
+    #cpy.to_csv("step3_out.csv", index=False)
+    #del cpy
+    # 
+    #step4_configs = []
+    #for _idx, row in front.iterrows():
+    #    layers = row["layers"]
+    #    bf = row["branching factor"]
+    #    config = params_to_rmi_config(layers, int(bf * 1.5))
+    #    
+    #    assert row["binary"] # remove this if we ever search linear RMIs
+    #    config["binary"] = row["binary"]
+    #    step4_configs.append(config)
+    # 
+    #    config = params_to_rmi_config(layers, int(bf * 0.5))
+    #    config["binary"] = row["binary"]
+    #    step4_configs.append(config)
+    # 
+    #print("Expanding the front, searching", len(step4_configs), "additional models")
+    #step4_results = parallel_test_rmis(data_path, step4_configs, phase="step4")
+    #step4_times = measure_rmis(data_path, step4_results)
+    #step4_results = pd.DataFrame(step4_results)
+    #step4_results["measured"] = step4_times
+    #print("Got results for", len(step4_results), "additional models")
+    # 
+    ## compute sizes
+    #results = pd.concat((step3_results, step4_results), sort=False).reset_index(drop=True)
+    #print("Final number of models evaluated:", len(results))
+    #mask = pareto_mask(results, props=["size linear search", "measured"], ignore_star=True)
+    #print("Size of front:", sum(mask))
+    #results["size"] = results["size binary search"]
+    #results["front"] = mask
+    #results[
+    #    ["layers", "branching factor", "size",
+    #     "average error", "average log2 error", "max error",
+    #     "binary", "front", "measured"]
+    #].sort_values("measured").to_csv("step4_out.csv", index=False)
+    #print("Results saved to step4_out.csv")
+    #os.system("cat step4_out.csv")
     
 
 if __name__ == "__main__":
     #optimize("/home/ryan/SOSD-private/data/normal_400M_uint64")
     #optimize("/home/ryan/SOSD-private/data/osm_cellids_400M_uint64")
     
-    optimize("/home/ryan/SOSD-private/data/osm_cellids_200M_uint64")
+    optimize("/home/ryan/SOSD-private/data/osm_cellids_200M_uint64", threads=16)
     os.system("mv step2_out.csv osm.csv")
+    optimize("/home/ryan/SOSD-private/data/osm_cellids_400M_uint64", threads=12)
+    os.system("mv step2_out.csv osm400.csv")
+    optimize("/home/ryan/SOSD-private/data/osm_cellids_600M_uint64", threads=10)
+    os.system("mv step2_out.csv osm600.csv")
+    optimize("/home/ryan/SOSD-private/data/osm_cellids_800M_uint64", threads=8)
+    os.system("mv step2_out.csv osm800.csv")
      
-    optimize("/home/ryan/SOSD-private/data/books_200M_uint64")
+    optimize("/home/ryan/SOSD-private/data/books_200M_uint64", threads=16)
     os.system("mv step2_out.csv books.csv")
+    optimize("/home/ryan/SOSD-private/data/books_400M_uint64", threads=12)
+    os.system("mv step2_out.csv books400.csv")
+    optimize("/home/ryan/SOSD-private/data/books_600M_uint64", threads=10)
+    os.system("mv step2_out.csv books600.csv")
+    optimize("/home/ryan/SOSD-private/data/books_800M_uint64", theads=8)
+    os.system("mv step2_out.csv books800.csv")
+
      
-    optimize("/home/ryan/SOSD-private/data/wiki_ts_200M_uint64")
+    optimize("/home/ryan/SOSD-private/data/wiki_ts_200M_uint64", threads=16)
     os.system("mv step2_out.csv wiki.csv")
      
-    optimize("/home/ryan/SOSD-private/data/fb_200M_uint64")
+    optimize("/home/ryan/SOSD-private/data/fb_200M_uint64", threads=16)
     os.system("mv step2_out.csv fb.csv")
+    optimize("/home/ryan/SOSD-private/data/fb_400M_uint64", threads=12)
+    os.system("mv step2_out.csv fb400.csv")
+    optimize("/home/ryan/SOSD-private/data/fb_600M_uint64", threads=10)
+    os.system("mv step2_out.csv fb600.csv")
+    optimize("/home/ryan/SOSD-private/data/fb_800M_uint64", threads=8)
+    os.system("mv step2_out.csv fb800.csv")
+
+
+
 
     #optimize("/home/ryan/SOSD-private/data/lognormal_200M_uint64")
 
