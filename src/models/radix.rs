@@ -13,7 +13,7 @@ pub struct RadixModel {
 }
 
 impl RadixModel {
-    pub fn new(data: &ModelDataContainer) -> RadixModel {
+    pub fn new(data: &ModelDataWrapper) -> RadixModel {
         if data.len() == 0 {
             return RadixModel { params: (0, 0) };
         }
@@ -85,7 +85,7 @@ pub struct RadixTable {
 }
 
 impl RadixTable {
-    pub fn new(data: &ModelDataContainer, bits: u8) -> RadixTable {
+    pub fn new(data: &ModelDataWrapper, bits: u8) -> RadixTable {
         let prefix = common_prefix_size(data);
         let mut hint_table: Vec<u32> = vec![0 ; 1 << bits];
 

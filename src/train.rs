@@ -19,7 +19,7 @@ pub struct TrainedRMI {
     pub rmi: Vec<Vec<Box<dyn Model>>>,
 }
 
-fn train_model(model_type: &str, data: &ModelDataContainer) -> Box<dyn Model> {
+fn train_model(model_type: &str, data: &ModelDataWrapper) -> Box<dyn Model> {
     let model: Box<dyn Model> = match model_type {
         "linear" => Box::new(LinearModel::new(data)),
         "linear_spline" => Box::new(LinearSplineModel::new(data)),
@@ -46,7 +46,7 @@ fn train_model(model_type: &str, data: &ModelDataContainer) -> Box<dyn Model> {
 fn validate(model_spec: &[String]) {
     let num_layers = model_spec.len();
     let empty_data = ModelData::empty();
-    let empty_container = ModelDataContainer::new(&empty_data);
+    let empty_container = ModelDataWrapper::new(&empty_data);
 
     for (idx, model) in model_spec.iter().enumerate() {
         let restriction = train_model(model, &empty_container).restriction();
@@ -73,7 +73,7 @@ fn validate(model_spec: &[String]) {
 }
 
 
-fn build_models_from(data: &ModelDataContainer,
+fn build_models_from(data: &ModelDataWrapper,
                      top_model: &Box<dyn Model>,
                      model_type: &str,
                      start_idx: usize, end_idx: usize,
@@ -85,7 +85,7 @@ fn build_models_from(data: &ModelDataContainer,
     assert!(start_idx <= data.len());
 
     let empty_data = ModelData::empty();
-    let dummy_md = ModelDataContainer::new(&empty_data);
+    let dummy_md = ModelDataWrapper::new(&empty_data);
     let mut leaf_models: Vec<Box<dyn Model>> = Vec::with_capacity(num_models as usize);
     let mut second_layer_data = Vec::with_capacity((end_idx - start_idx) / num_models as usize);
     let mut last_target = first_model_idx;
@@ -105,7 +105,7 @@ fn build_models_from(data: &ModelDataContainer,
             // this is the first datapoint for the next leaf model.
             // train the previous leaf model.
             let md = ModelData::IntKeyToIntPos(second_layer_data);
-            let container = ModelDataContainer::new(&md);
+            let container = ModelDataWrapper::new(&md);
             let leaf_model = train_model(model_type, &container);
             leaf_models.push(leaf_model);
             
@@ -126,7 +126,7 @@ fn build_models_from(data: &ModelDataContainer,
     // train the last remaining model
     assert!(! second_layer_data.is_empty());
     let md = ModelData::IntKeyToIntPos(second_layer_data);
-    let container = ModelDataContainer::new(&md);
+    let container = ModelDataWrapper::new(&md);
     let leaf_model = train_model(model_type, &container);
     leaf_models.push(leaf_model);
     assert!(leaf_models.len() <= num_models);
@@ -139,7 +139,7 @@ fn build_models_from(data: &ModelDataContainer,
     return leaf_models;
 }
 
-fn train_two_layer(md_container: &mut ModelDataContainer,
+fn train_two_layer(md_container: &mut ModelDataWrapper,
                    layer1_model: &str, layer2_model: &str,
                    num_leaf_models: u64) -> TrainedRMI {
     validate(&[String::from(layer1_model), String::from(layer2_model)]);
@@ -256,7 +256,7 @@ fn train_two_layer(md_container: &mut ModelDataContainer,
 
 }
 
-pub fn train(data: &mut ModelDataContainer,
+pub fn train(data: &mut ModelDataWrapper,
              model_spec: &str, branch_factor: u64) -> TrainedRMI {
     let (model_list, last_model): (Vec<String>, String) = {
         let mut all_models: Vec<String> = model_spec.split(',').map(String::from).collect();
@@ -284,7 +284,7 @@ pub fn train(data: &mut ModelDataContainer,
         let mut models: Vec<Box<dyn Model>> = Vec::with_capacity(next_layer_size as usize);
 
         for model_data in data_partitions.into_iter() {
-            let mut md_container = ModelDataContainer::new(&model_data);
+            let mut md_container = ModelDataWrapper::new(&model_data);
 
             // not at the last layer -- rescale
             md_container.set_scale(next_layer_size as f64 / num_rows as f64);
@@ -323,7 +323,7 @@ pub fn train(data: &mut ModelDataContainer,
 
     let mut n = 1;
     for (midx, model_data) in data_partitions.into_iter().enumerate() {
-        let md_container = ModelDataContainer::new(&model_data);
+        let md_container = ModelDataWrapper::new(&model_data);
         let last_model = train_model(last_model.as_str(), &md_container);
         let mut max_error = 0;
         

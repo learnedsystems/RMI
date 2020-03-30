@@ -35,14 +35,14 @@ use std::io::Write;
 use byteorder::{WriteBytesExt, LittleEndian};
 
 #[derive(Clone)]
-pub struct ModelDataContainer<'a> {
+pub struct ModelDataWrapper<'a> {
     model_data: &'a ModelData,
     scaling_factor: f64
 }
 
-impl <'a> ModelDataContainer<'a> {
-    pub fn new(md: &'a ModelData) -> ModelDataContainer<'a> {
-        return ModelDataContainer {
+impl <'a> ModelDataWrapper<'a> {
+    pub fn new(md: &'a ModelData) -> ModelDataWrapper<'a> {
+        return ModelDataWrapper {
             model_data: md,
             scaling_factor: 1.0
         }

@@ -15,7 +15,7 @@ const SMALLEST_LAYER_SIZE: usize = 32;
 
 const SEARCH_ERR_MARGIN: usize = (2.0 * OTHER_LAYER_DELTA) as usize;
 
-fn pgm(data: &ModelDataContainer) -> (Vec<Vec<u64>>, Vec<Vec<f64>>) {
+fn pgm(data: &ModelDataWrapper) -> (Vec<Vec<u64>>, Vec<Vec<f64>>) {
     if data.len() == 0 {
         return (Vec::new(), Vec::new());
     }
@@ -38,7 +38,7 @@ fn pgm(data: &ModelDataContainer) -> (Vec<Vec<u64>>, Vec<Vec<f64>>) {
         }
 
         let md = ModelData::IntKeyToIntPos(d);
-        let md_container = ModelDataContainer::new(&md);
+        let md_container = ModelDataWrapper::new(&md);
 
         let (p, c) = plr(&md_container, OTHER_LAYER_DELTA, true);
         pts.push(p);
@@ -60,7 +60,7 @@ pub struct PGM {
 }
 
 impl PGM {
-    pub fn new(data: &ModelDataContainer) -> PGM {
+    pub fn new(data: &ModelDataWrapper) -> PGM {
         let (points, coeffs) = pgm(data);
         return PGM { points, coeffs };
     }
