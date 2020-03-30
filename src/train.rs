@@ -136,13 +136,12 @@ fn build_models_from(data: &ModelDataContainer,
     return leaf_models;
 }
 
-fn train_two_layer(data: ModelData,
+fn train_two_layer(md_container: &mut ModelDataContainer,
                    layer1_model: &str, layer2_model: &str,
                    num_leaf_models: u64) -> TrainedRMI {
     validate(&[String::from(layer1_model), String::from(layer2_model)]);
 
-    let num_rows = data.len();
-    let mut md_container = ModelDataContainer::new(data);
+    let num_rows = md_container.len();
 
     info!("Training top-level {} model layer", layer1_model);
     md_container.set_scale(num_leaf_models as f64 / num_rows as f64);
@@ -254,7 +253,8 @@ fn train_two_layer(data: ModelData,
 
 }
 
-pub fn train(data: ModelData, model_spec: &str, branch_factor: u64) -> TrainedRMI {
+pub fn train(data: &mut ModelDataContainer,
+             model_spec: &str, branch_factor: u64) -> TrainedRMI {
     let (model_list, last_model): (Vec<String>, String) = {
         let mut all_models: Vec<String> = model_spec.split(',').map(String::from).collect();
         validate(&all_models);
@@ -267,7 +267,7 @@ pub fn train(data: ModelData, model_spec: &str, branch_factor: u64) -> TrainedRM
     }
 
     let mut rmi: Vec<Vec<Box<dyn Model>>> = Vec::new();
-    let mut data_partitions = vec![data];
+    let mut data_partitions = vec![data.clone().into_data()];
     let num_rows = data_partitions[0].len();
 
     let mut current_model_count = 1;

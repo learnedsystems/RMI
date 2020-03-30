@@ -12,6 +12,7 @@ mod models;
 mod train;
 
 use load::{load_data, DataType};
+use models::ModelDataContainer;
 use train::train;
 
 use json::*;
@@ -102,6 +103,7 @@ fn main() {
     } else {
         load_data(&fp, DataType::UINT32, downsample)
     };
+    let mut md_container = ModelDataContainer::new(data);
     
     if let Some(param_grid) = matches.value_of("param-grid").map(|x| x.to_string()) {
         let pg = {
@@ -139,9 +141,8 @@ fn main() {
             to_test.iter().for_each(|(models, branch_factor, namespace, bsearch)| {
                 trace!("Training RMI {} with branching factor {}", models, *branch_factor);
                 
-                // TODO this copy should not be required
                 let start_time = SystemTime::now();
-                let trained_model = train(data.clone(), models, *branch_factor);
+                let trained_model = train(&mut md_container, models, *branch_factor);
                 let build_time = SystemTime::now()
                     .duration_since(start_time)
                     .map(|d| d.as_nanos())
@@ -198,7 +199,7 @@ fn main() {
         let last_layer_errors = matches.is_present("last-layer-errors");
         
         let start_time = SystemTime::now();
-        let trained_model = train(data, models, branch_factor);
+        let trained_model = train(&mut md_container, models, branch_factor);
         let build_time = SystemTime::now()
             .duration_since(start_time)
             .map(|d| d.as_nanos())

@@ -34,6 +34,7 @@ use std::collections::HashSet;
 use std::io::Write;
 use byteorder::{WriteBytesExt, LittleEndian};
 
+#[derive(Clone)]
 pub struct ModelDataContainer {
     model_data: ModelData,
     scaling_factor: f64
@@ -78,6 +79,10 @@ impl ModelDataContainer {
 
     pub fn as_int_int(&self) -> &[(u64, u64)] {
         return self.model_data.as_int_int();
+    }
+
+    pub fn into_data(self) -> ModelData {
+        return self.model_data;
     }
 }
 
