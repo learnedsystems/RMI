@@ -23,7 +23,7 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::time::SystemTime;
 use std::fs;
-//use rayon::prelude::*;
+use rayon::prelude::*;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use clap::{App, Arg};
@@ -137,7 +137,7 @@ fn main() {
                           .template("{pos} / {len} ({msg}) {wide_bar} {eta}"));
             
             let results: Vec<JsonValue> = to_test
-                .iter().map(|(models, branch_factor, namespace, bsearch)| {
+                .par_iter().map(|(models, branch_factor, namespace, bsearch)| {
                     trace!("Training RMI {} with branching factor {}",
                            models, *branch_factor);
                     let mut md_container = ModelDataContainer::new(&data);
