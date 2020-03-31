@@ -115,9 +115,9 @@ def check_rmi_cache(data_path, conf):
             results = json.load(f)
 
         assert results["namespace"] == conf["namespace"]
-        with FS_LOCK:
-            os.system(f'cp {path}/*.cpp ./')
-            os.system(f'cp {path}/*.h ./')
+        #with FS_LOCK:
+        #    os.system(f'cp {path}/*.cpp ./')
+        #    os.system(f'cp {path}/*.h ./')
         return results
 
     return False
@@ -180,11 +180,11 @@ def parallel_test_rmis(data_path, configs, threads=8, phase=""):
                 print("Failure in RMI construction at idx", idx)
                 assert False
 
-        os.system("sync")
-        os.system("rm -rf opt/")
-        os.system("mkdir opt")
-        os.system("mv nm* opt/")
-        os.system("sync")
+        #os.system("sync")
+        #os.system("rm -rf opt/")
+        #os.system("mkdir opt")
+        #os.system("mv nm* opt/")
+        #os.system("sync")
         for idx, ws in enumerate(jobs):
             fn = f"{phase}{idx}.json_results"
             with open(fn, "r") as f:
@@ -253,6 +253,11 @@ def pareto_mask(df, props=["size binary search", "average log2 error", "inferenc
         my_props = el1[props]
         starred = "star" in el1 and el1["star"]
 
+        if ("average log2 error" in props) and ("radix" in el1.layers):
+            al2e_index = props.index("average log2 error")
+            my_props[al2e_index] += 2
+            
+        
         if starred and (not ignore_star):
             mask.append(True)
             continue
@@ -262,6 +267,10 @@ def pareto_mask(df, props=["size binary search", "average log2 error", "inferenc
                 continue
 
             other_props = el2[props]
+            if ("average log2 error" in props) and ("radix" in el2.layers):
+                al2e_index = props.index("average log2 error")
+                other_props[al2e_index] += 2
+                
             if (other_props <= my_props).all():
                 mask.append(False)
                 break
@@ -480,16 +489,13 @@ def optimize(data_path, threads=16):
     
 
 if __name__ == "__main__":
-    #optimize("/home/ryan/SOSD-private/data/normal_400M_uint64")
-    #optimize("/home/ryan/SOSD-private/data/osm_cellids_400M_uint64")
-    
     optimize("/home/ryan/SOSD-private/data/osm_cellids_200M_uint64", threads=16)
     os.system("mv step2_out.csv osm.csv")
     optimize("/home/ryan/SOSD-private/data/osm_cellids_400M_uint64", threads=12)
     os.system("mv step2_out.csv osm400.csv")
     optimize("/home/ryan/SOSD-private/data/osm_cellids_600M_uint64", threads=10)
     os.system("mv step2_out.csv osm600.csv")
-    optimize("/home/ryan/SOSD-private/data/osm_cellids_800M_uint64", threads=8)
+    optimize("/home/ryan/SOSD-private/data/osm_cellids_800M_uint64", threads=6)
     os.system("mv step2_out.csv osm800.csv")
      
     optimize("/home/ryan/SOSD-private/data/books_200M_uint64", threads=16)
@@ -498,7 +504,7 @@ if __name__ == "__main__":
     os.system("mv step2_out.csv books400.csv")
     optimize("/home/ryan/SOSD-private/data/books_600M_uint64", threads=10)
     os.system("mv step2_out.csv books600.csv")
-    optimize("/home/ryan/SOSD-private/data/books_800M_uint64", theads=8)
+    optimize("/home/ryan/SOSD-private/data/books_800M_uint64", threads=6)
     os.system("mv step2_out.csv books800.csv")
 
      
@@ -507,12 +513,6 @@ if __name__ == "__main__":
      
     optimize("/home/ryan/SOSD-private/data/fb_200M_uint64", threads=16)
     os.system("mv step2_out.csv fb.csv")
-    optimize("/home/ryan/SOSD-private/data/fb_400M_uint64", threads=12)
-    os.system("mv step2_out.csv fb400.csv")
-    optimize("/home/ryan/SOSD-private/data/fb_600M_uint64", threads=10)
-    os.system("mv step2_out.csv fb600.csv")
-    optimize("/home/ryan/SOSD-private/data/fb_800M_uint64", threads=8)
-    os.system("mv step2_out.csv fb800.csv")
 
 
 
