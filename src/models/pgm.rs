@@ -38,7 +38,7 @@ fn pgm(data: &ModelDataContainer) -> (Vec<Vec<u64>>, Vec<Vec<f64>>) {
         }
 
         let md = ModelData::IntKeyToIntPos(d);
-        let md_container = ModelDataContainer::new(md);
+        let md_container = ModelDataContainer::new(&md);
 
         let (p, c) = plr(&md_container, OTHER_LAYER_DELTA, true);
         pts.push(p);

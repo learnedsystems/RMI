@@ -23,6 +23,7 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::time::SystemTime;
 use std::fs;
+use rayon::prelude::*;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use clap::{App, Arg};
@@ -103,7 +104,6 @@ fn main() {
     } else {
         load_data(&fp, DataType::UINT32, downsample)
     };
-    let mut md_container = ModelDataContainer::new(data);
     
     if let Some(param_grid) = matches.value_of("param-grid").map(|x| x.to_string()) {
         let pg = {
@@ -136,53 +136,59 @@ fn main() {
             bar.set_style(ProgressStyle::default_bar()
                           .template("{pos} / {len} ({msg}) {wide_bar} {eta}"));
             
-            let mut results = json::JsonValue::new_array();
+            let results: Vec<JsonValue> = to_test
+                .par_iter().map(|(models, branch_factor, namespace, bsearch)| {
+                    trace!("Training RMI {} with branching factor {}",
+                           models, *branch_factor);
+                    let mut md_container = ModelDataContainer::new(&data);
+                    
+                    let start_time = SystemTime::now();
+                    let trained_model = train(&mut md_container, models, *branch_factor);
+                    let build_time = SystemTime::now()
+                        .duration_since(start_time)
+                        .map(|d| d.as_nanos())
+                        .unwrap_or(std::u128::MAX);
 
-            to_test.iter().for_each(|(models, branch_factor, namespace, bsearch)| {
-                trace!("Training RMI {} with branching factor {}", models, *branch_factor);
-                
-                let start_time = SystemTime::now();
-                let trained_model = train(&mut md_container, models, *branch_factor);
-                let build_time = SystemTime::now()
-                    .duration_since(start_time)
-                    .map(|d| d.as_nanos())
-                    .unwrap_or(std::u128::MAX);
+                    let size_bs = codegen::rmi_size(&trained_model.rmi, true);
+                    let size_ls = codegen::rmi_size(&trained_model.rmi, false);
 
-                let size_bs = codegen::rmi_size(&trained_model.rmi, true);
-                let size_ls = codegen::rmi_size(&trained_model.rmi, false);
-                results.push(object! {
-                    "layers" => models.clone(),
-                    "branching factor" => *branch_factor,
-                    "average error" => trained_model.model_avg_error as f64,
-                    "average error %" => trained_model.model_max_error as f64 / num_rows as f64 * 100.0,
-                    "average l2 error" => trained_model.model_avg_l2_error as f64,
-                    "average log2 error" => trained_model.model_avg_log2_error,
-                    "max error" => trained_model.model_max_error,
-                    "max error %" => trained_model.model_max_error as f64 / num_rows as f64 * 100.0,
-                    "size binary search" => size_bs,
-                    "size linear search" => size_ls,
-                    "namespace" => namespace.clone(),
-                    "binary" => *bsearch
-                }).unwrap();
+                    let result_obj = object! {
+                        "layers" => models.clone(),
+                        "branching factor" => *branch_factor,
+                        "average error" => trained_model.model_avg_error as f64,
+                        "average error %" => trained_model.model_max_error as f64
+                            / num_rows as f64 * 100.0,
+                        "average l2 error" => trained_model.model_avg_l2_error as f64,
+                        "average log2 error" => trained_model.model_avg_log2_error,
+                        "max error" => trained_model.model_max_error,
+                        "max error %" => trained_model.model_max_error as f64
+                            / num_rows as f64 * 100.0,
+                        "size binary search" => size_bs,
+                        "size linear search" => size_ls,
+                        "namespace" => namespace.clone(),
+                        "binary" => *bsearch
+                    };
+                    
+                    if let Some(nmspc) = namespace {
+                        codegen::output_rmi(
+                            &nmspc,
+                            *bsearch,
+                            trained_model,
+                            num_rows,
+                            build_time,
+                            data_dir).unwrap();
 
-                if let Some(nmspc) = namespace {
-                    codegen::output_rmi(
-                        &nmspc,
-                        *bsearch,
-                        trained_model,
-                        num_rows,
-                        build_time,
-                        data_dir).unwrap();
-
-                }
-                
-                bar.inc(1);
-            });
+                    }
+                    
+                    bar.inc(1);
+                    return result_obj;
+                }).collect();
             bar.finish();
 
             let f = File::create(format!("{}_results", param_grid)).expect("Could not write results file");
             let mut bw = BufWriter::new(f);
-            results.write(&mut bw).unwrap();
+            let json_results = object! { "results" => results };
+            json_results.write(&mut bw).unwrap();
             
         } else {
             panic!("Configs must have an array as its value");
@@ -197,7 +203,8 @@ fn main() {
             .parse::<u64>()
             .unwrap();
         let last_layer_errors = matches.is_present("last-layer-errors");
-        
+        let mut md_container = ModelDataContainer::new(&data);
+
         let start_time = SystemTime::now();
         let trained_model = train(&mut md_container, models, branch_factor);
         let build_time = SystemTime::now()

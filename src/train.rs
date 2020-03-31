@@ -46,7 +46,7 @@ fn train_model(model_type: &str, data: &ModelDataContainer) -> Box<dyn Model> {
 fn validate(model_spec: &[String]) {
     let num_layers = model_spec.len();
     let empty_data = ModelData::empty();
-    let empty_container = ModelDataContainer::new(empty_data);
+    let empty_container = ModelDataContainer::new(&empty_data);
 
     for (idx, model) in model_spec.iter().enumerate() {
         let restriction = train_model(model, &empty_container).restriction();
@@ -83,8 +83,9 @@ fn build_models_from(data: &ModelDataContainer,
     assert!(end_idx > start_idx);
     assert!(end_idx <= data.len());
     assert!(start_idx <= data.len());
-    
-    let dummy_md = ModelDataContainer::new(ModelData::empty());
+
+    let empty_data = ModelData::empty();
+    let dummy_md = ModelDataContainer::new(&empty_data);
     let mut leaf_models: Vec<Box<dyn Model>> = Vec::with_capacity(num_models as usize);
     let mut second_layer_data = Vec::with_capacity((end_idx - start_idx) / num_models as usize);
     let mut last_target = first_model_idx;
@@ -103,7 +104,8 @@ fn build_models_from(data: &ModelDataContainer,
         if target > last_target {
             // this is the first datapoint for the next leaf model.
             // train the previous leaf model.
-            let container = ModelDataContainer::new(ModelData::IntKeyToIntPos(second_layer_data));
+            let md = ModelData::IntKeyToIntPos(second_layer_data);
+            let container = ModelDataContainer::new(&md);
             let leaf_model = train_model(model_type, &container);
             leaf_models.push(leaf_model);
             
@@ -123,7 +125,8 @@ fn build_models_from(data: &ModelDataContainer,
 
     // train the last remaining model
     assert!(! second_layer_data.is_empty());
-    let container = ModelDataContainer::new(ModelData::IntKeyToIntPos(second_layer_data));
+    let md = ModelData::IntKeyToIntPos(second_layer_data);
+    let container = ModelDataContainer::new(&md);
     let leaf_model = train_model(model_type, &container);
     leaf_models.push(leaf_model);
     assert!(leaf_models.len() <= num_models);
@@ -267,7 +270,7 @@ pub fn train(data: &mut ModelDataContainer,
     }
 
     let mut rmi: Vec<Vec<Box<dyn Model>>> = Vec::new();
-    let mut data_partitions = vec![data.clone().into_data()];
+    let mut data_partitions = vec![data.clone().to_data()];
     let num_rows = data_partitions[0].len();
 
     let mut current_model_count = 1;
@@ -281,7 +284,7 @@ pub fn train(data: &mut ModelDataContainer,
         let mut models: Vec<Box<dyn Model>> = Vec::with_capacity(next_layer_size as usize);
 
         for model_data in data_partitions.into_iter() {
-            let mut md_container = ModelDataContainer::new(model_data);
+            let mut md_container = ModelDataContainer::new(&model_data);
 
             // not at the last layer -- rescale
             md_container.set_scale(next_layer_size as f64 / num_rows as f64);
@@ -320,7 +323,7 @@ pub fn train(data: &mut ModelDataContainer,
 
     let mut n = 1;
     for (midx, model_data) in data_partitions.into_iter().enumerate() {
-        let md_container = ModelDataContainer::new(model_data);
+        let md_container = ModelDataContainer::new(&model_data);
         let last_model = train_model(last_model.as_str(), &md_container);
         let mut max_error = 0;
         
