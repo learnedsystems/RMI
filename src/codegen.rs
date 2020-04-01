@@ -469,11 +469,11 @@ fn generate_code<T: Write>(
                         read_code.push(format!("    infile.read((char*){fn}, {size});",
                                                fn=array_name!(idx), size=lp.size()));
                         read_code.push(format!("    if (!infile.good()) return false;"));
-                        read_code.push(format!("    return true;"));
                         read_code.push(format!("  }}"));
                     }
                 }
             }
+            read_code.push(format!("  return true;"));
             read_code.push(format!("}}"));
 
         }
