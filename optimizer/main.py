@@ -17,7 +17,7 @@ RMI_PATH = "../target/release/rmi"
 RMI_CACHE_DIR = "/ssd1/ryan/rmi_cache"
 
 # define the model search space
-TOP_ONLY_LAYERS = ["radix", "radix18", "radix22", "radix26"]
+TOP_ONLY_LAYERS = ["radix", "radix18", "radix22", "radix26", "robust_linear"]
 ANYWHERE_LAYERS = ["linear", "cubic", "linear_spline"]
 SPECIALTY_TOP_LAYERS = ["histogram", "loglinear", "normal", "lognormal", "bradix"]
 BRANCHING_FACTORS = list(int(x) for x in 2**np.arange(7, 22, 1))
