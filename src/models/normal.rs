@@ -23,7 +23,7 @@ fn phi(x: f64) -> f64 {
     return 1.0 / (1.0 + exp1(-1.65451 * x));
 }
 
-fn ncdf(loc_data: &ModelDataContainer) -> (f64, f64, f64) {
+fn ncdf(loc_data: &ModelDataWrapper) -> (f64, f64, f64) {
     let mut scale = -f64::INFINITY;
     let mut mean = 0.0;
     let mut stdev = 0.0;
@@ -45,7 +45,7 @@ fn ncdf(loc_data: &ModelDataContainer) -> (f64, f64, f64) {
     return (mean, stdev, scale);
 }
 
-fn lncdf(loc_data: &ModelDataContainer) -> (f64, f64, f64) {
+fn lncdf(loc_data: &ModelDataWrapper) -> (f64, f64, f64) {
     let mut scale = -f64::INFINITY;
     let mut mean = 0.0;
     let mut stdev = 0.0;
@@ -74,7 +74,7 @@ pub struct NormalModel {
 }
 
 impl NormalModel {
-    pub fn new(data: &ModelDataContainer) -> NormalModel {
+    pub fn new(data: &ModelDataWrapper) -> NormalModel {
         return NormalModel { params: ncdf(data) };
     }
 }
@@ -146,7 +146,7 @@ pub struct LogNormalModel {
 }
 
 impl LogNormalModel {
-    pub fn new(data: &ModelDataContainer) -> LogNormalModel {
+    pub fn new(data: &ModelDataWrapper) -> LogNormalModel {
         return LogNormalModel {
             params: lncdf(data),
         };

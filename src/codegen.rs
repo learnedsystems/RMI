@@ -440,7 +440,7 @@ fn generate_code<T: Write>(
 
         // store the data on disk, add code to load it
         StorageConf::Disk(path) => {
-            read_code.push(format!("void load(char const* dataPath) {{"));
+            read_code.push(format!("bool load(char const* dataPath) {{"));
             
             for lp in layer_params.iter() {
                 match lp {
@@ -459,16 +459,21 @@ fn generate_code<T: Write>(
                         read_code.push(format!("  {{"));
                         read_code.push(format!("    std::ifstream infile(std::filesystem::path(dataPath) / \"{ns}_{fn}\", std::ios::in | std::ios::binary);",
                                                ns=namespace, fn=array_name!(idx)));
+                        read_code.push(format!("    if (!infile.good()) return false;"));
                         if lp.requires_malloc() {
                             read_code.push(format!("    {} = ({}*) malloc({});",
                                                    array_name!(idx), lp.pointer_type(), lp.size()));
+                            read_code.push(format!("    if ({} == NULL) return false;",
+                                                   array_name!(idx)));
                         }
                         read_code.push(format!("    infile.read((char*){fn}, {size});",
                                                fn=array_name!(idx), size=lp.size()));
+                        read_code.push(format!("    if (!infile.good()) return false;"));
                         read_code.push(format!("  }}"));
                     }
                 }
             }
+            read_code.push(format!("  return true;"));
             read_code.push(format!("}}"));
 
         }
@@ -643,7 +648,7 @@ inline size_t FCLAMP(double inp, double bound) {{
     writeln!(header_output, "namespace {} {{", namespace)?;
 
     if let StorageConf::Disk(_) = storage {
-        writeln!(header_output, "void load(char const* dataPath);")?;
+        writeln!(header_output, "bool load(char const* dataPath);")?;
     }
 
     writeln!(header_output, "void cleanup();")?;

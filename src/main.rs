@@ -12,7 +12,7 @@ mod models;
 mod train;
 
 use load::{load_data, DataType};
-use models::ModelDataContainer;
+use models::ModelDataWrapper;
 use train::train;
 
 use json::*;
@@ -140,7 +140,7 @@ fn main() {
                 .par_iter().map(|(models, branch_factor, namespace, bsearch)| {
                     trace!("Training RMI {} with branching factor {}",
                            models, *branch_factor);
-                    let mut md_container = ModelDataContainer::new(&data);
+                    let mut md_container = ModelDataWrapper::new(&data);
                     
                     let start_time = SystemTime::now();
                     let trained_model = train(&mut md_container, models, *branch_factor);
@@ -203,7 +203,7 @@ fn main() {
             .parse::<u64>()
             .unwrap();
         let last_layer_errors = matches.is_present("last-layer-errors");
-        let mut md_container = ModelDataContainer::new(&data);
+        let mut md_container = ModelDataWrapper::new(&data);
 
         let start_time = SystemTime::now();
         let trained_model = train(&mut md_container, models, branch_factor);

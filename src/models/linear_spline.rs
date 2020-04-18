@@ -6,7 +6,7 @@
 // < end copyright >
 use crate::models::*;
 
-fn linear_splines(data: &ModelDataContainer) -> (f64, f64) {
+fn linear_splines(data: &ModelDataWrapper) -> (f64, f64) {
     if data.len() == 0 {
         return (0.0, 1.0);
     }
@@ -34,7 +34,7 @@ pub struct LinearSplineModel {
 }
 
 impl LinearSplineModel {
-    pub fn new(data: &ModelDataContainer) -> LinearSplineModel {
+    pub fn new(data: &ModelDataWrapper) -> LinearSplineModel {
         return LinearSplineModel {
             params: linear_splines(data),
         };

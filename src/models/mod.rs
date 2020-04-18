@@ -21,6 +21,7 @@ pub use bottom_up_plr::BottomUpPLR;
 pub use cubic_spline::CubicSplineModel;
 pub use histogram::EquidepthHistogramModel;
 pub use linear::LinearModel;
+pub use linear::RobustLinearModel;
 pub use linear::LogLinearModel;
 pub use linear_spline::LinearSplineModel;
 pub use normal::LogNormalModel;
@@ -35,14 +36,14 @@ use std::io::Write;
 use byteorder::{WriteBytesExt, LittleEndian};
 
 #[derive(Clone)]
-pub struct ModelDataContainer<'a> {
+pub struct ModelDataWrapper<'a> {
     model_data: &'a ModelData,
     scaling_factor: f64
 }
 
-impl <'a> ModelDataContainer<'a> {
-    pub fn new(md: &'a ModelData) -> ModelDataContainer<'a> {
-        return ModelDataContainer {
+impl <'a> ModelDataWrapper<'a> {
+    pub fn new(md: &'a ModelData) -> ModelDataWrapper<'a> {
+        return ModelDataWrapper {
             model_data: md,
             scaling_factor: 1.0
         }
@@ -130,7 +131,7 @@ macro_rules! define_iterator_type {
             fn set_scale(&mut self, scale: f64) {
                 self.scale = scale;
             }
-            #[allow(dead_code)]
+
             pub fn bound(&mut self, start: usize, stop: usize) {
                 assert!(start < stop);
                 assert!(stop <= self.data.len());
