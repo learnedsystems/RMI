@@ -107,8 +107,8 @@ def build_shared_object(data_path, conf):
 def check_rmi_cache(data_path, conf):
     path = cache_path(data_path, conf)
     if os.path.exists(path):
-        if not any(x.endswith("cpp") for x in os.listdir(path)):
-            print("RMI cache dir had no CPP files.")
+        if not any(x.endswith("json") for x in os.listdir(path)):
+            print("RMI cache dir had no JSON files.")
             return False
         
         with open(f"{path}/results.json", "r") as f:
@@ -127,9 +127,10 @@ def cache_rmi(data_path, result):
     os.makedirs(path, exist_ok=True)
 
     with FS_LOCK:
-        os.system(f'cp opt/{result["namespace"]}.cpp {path}/')
-        os.system(f'cp opt/{result["namespace"]}.h {path}/')
-        os.system(f'cp opt/{result["namespace"]}_data.h {path}/')
+        #os.system(f'cp opt/{result["namespace"]}.cpp {path}/')
+        #os.system(f'cp opt/{result["namespace"]}.h {path}/')
+        #os.system(f'cp opt/{result["namespace"]}_data.h {path}/')
+        pass
 
     with open(f"{path}/results.json", "w") as f:
         json.dump(result, f)
@@ -138,7 +139,8 @@ def cache_rmi(data_path, result):
 def parallel_test_rmis(data_path, configs, threads=8, phase=""):
     if len(configs) < threads:
         threads = len(configs)
-
+    print(configs)
+        
     with FS_LOCK:
         os.system("rm -f *.json *.json_results")
         jobs = [[] for _ in range(threads)]
@@ -188,9 +190,8 @@ def parallel_test_rmis(data_path, configs, threads=8, phase=""):
         for idx, ws in enumerate(jobs):
             fn = f"{phase}{idx}.json_results"
             with open(fn, "r") as f:
-                results = json.load(f)
+                results = json.load(f)["results"]
                 data.extend(results)
-
                 for result in results:
                     cache_rmi(data_path, result)
 
@@ -315,9 +316,9 @@ def measure_rmis(data_path, configs):
             parallel_test_rmis(data_path, configs)
             for config in uncached_configs:
                 ns = config["namespace"]
-                os.system(f"cp opt/{ns}.cpp SOSD/competitors/rmi/")
-                os.system(f"cp opt/{ns}_data.h SOSD/competitors/rmi/")
-                os.system(f"cp opt/{ns}.h SOSD/competitors/rmi/")
+                #os.system(f"cp opt/{ns}.cpp SOSD/competitors/rmi/")
+                #os.system(f"cp opt/{ns}_data.h SOSD/competitors/rmi/")
+                #os.system(f"cp opt/{ns}.h SOSD/competitors/rmi/")
 
             with open("SOSD/benchmark.cc.mustache", "r") as f:
                 template = f.read()
@@ -357,7 +358,7 @@ def measure_rmis(data_path, configs):
             
     return all_times
 
-def optimize(data_path, threads=16):
+def optimize(data_path, threads=8):
 
     print("Compiling RMI learner...")
     os.system("cd .. && cargo build --release")
@@ -489,31 +490,39 @@ def optimize(data_path, threads=16):
     
 
 if __name__ == "__main__":
-    optimize("/home/ryan/SOSD-private/data/osm_cellids_200M_uint64", threads=16)
-    os.system("mv step2_out.csv osm.csv")
-    optimize("/home/ryan/SOSD-private/data/osm_cellids_400M_uint64", threads=12)
-    os.system("mv step2_out.csv osm400.csv")
-    optimize("/home/ryan/SOSD-private/data/osm_cellids_600M_uint64", threads=10)
-    os.system("mv step2_out.csv osm600.csv")
-    optimize("/home/ryan/SOSD-private/data/osm_cellids_800M_uint64", threads=6)
-    os.system("mv step2_out.csv osm800.csv")
+    #optimize("/home/ryan/SOSD-private/data/osm_cellids_200M_uint64")
+    #os.system("mv step2_out.csv osm.csv")
+    #optimize("/home/ryan/SOSD-private/data/osm_cellids_400M_uint64")
+    #os.system("mv step2_out.csv osm400.csv")
+    #optimize("/home/ryan/SOSD-private/data/osm_cellids_600M_uint64")
+    #os.system("mv step2_out.csv osm600.csv")
+    #optimize("/home/ryan/SOSD-private/data/osm_cellids_800M_uint64")
+    #os.system("mv step2_out.csv osm800.csv")
+    # 
+    #optimize("/home/ryan/SOSD-private/data/books_200M_uint64")
+    #os.system("mv step2_out.csv books.csv")
+    #optimize("/home/ryan/SOSD-private/data/books_400M_uint64")
+    #os.system("mv step2_out.csv books400.csv")
+    #optimize("/home/ryan/SOSD-private/data/books_600M_uint64")
+    #os.system("mv step2_out.csv books600.csv")
+    #optimize("/home/ryan/SOSD-private/data/books_800M_uint64")
+    #os.system("mv step2_out.csv books800.csv")
+    # 
+    # 
+    #optimize("/home/ryan/SOSD-private/data/wiki_ts_200M_uint64")
+    #os.system("mv step2_out.csv wiki.csv")
      
-    optimize("/home/ryan/SOSD-private/data/books_200M_uint64", threads=16)
-    os.system("mv step2_out.csv books.csv")
-    optimize("/home/ryan/SOSD-private/data/books_400M_uint64", threads=12)
-    os.system("mv step2_out.csv books400.csv")
-    optimize("/home/ryan/SOSD-private/data/books_600M_uint64", threads=10)
-    os.system("mv step2_out.csv books600.csv")
-    optimize("/home/ryan/SOSD-private/data/books_800M_uint64", threads=6)
-    os.system("mv step2_out.csv books800.csv")
-
-     
-    optimize("/home/ryan/SOSD-private/data/wiki_ts_200M_uint64", threads=16)
-    os.system("mv step2_out.csv wiki.csv")
-     
-    optimize("/home/ryan/SOSD-private/data/fb_200M_uint64", threads=16)
+    optimize("/home/ryan/SOSD-private/data/fb_200M_uint64")
     os.system("mv step2_out.csv fb.csv")
 
+    #optimize("/home/ryan/SOSD-private/data/books_200M_uint32")
+    #os.system("mv step2_out.csv books32.csv")
+
+    #optimize("/home/ryan/SOSD-private/data/fb_200M_uint32")
+    #os.system("mv step2_out.csv fb32.csv")
+
+    #optimize("/home/ryan/SOSD-private/data/normal_200M_uint32")
+    #os.system("mv step2_out.csv norm32.csv")
 
 
 
