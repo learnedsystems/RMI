@@ -167,7 +167,7 @@ impl LogLinearModel {
 impl Model for LogLinearModel {
     fn predict_to_float(&self, inp: ModelInput) -> f64 {
         let (alpha, beta) = self.params;
-        return exp1(alpha + beta * inp.as_float());
+        return exp1(beta.mul_add(inp.as_float(), alpha));
     }
 
     fn input_type(&self) -> ModelDataType {
@@ -217,5 +217,64 @@ mod loglin_tests {
     #[test]
     fn test_empty() {
         LogLinearModel::new(&ModelData::empty());
+    }
+}
+
+
+pub struct RobustLinearModel {
+    params: (f64, f64),
+}
+
+
+impl RobustLinearModel {
+    pub fn new(data: &ModelDataWrapper) -> RobustLinearModel {
+        let total_items = data.len();
+        if data.len() == 0 {
+            return RobustLinearModel {
+                params: (0.0, 0.0)
+            };
+        }
+        
+        let bnd = usize::max(1, ((total_items as f64) * 0.0001) as usize);
+        assert!(bnd*2+1 < data.len());
+        
+        let mut iter = data.iter_float_float();
+        iter.bound(bnd, data.len() - bnd);
+        let robust_params = slr(iter);
+        
+        return RobustLinearModel {
+            params: robust_params
+        };
+    }
+}
+
+impl Model for RobustLinearModel {
+    fn predict_to_float(&self, inp: ModelInput) -> f64 {
+        let (alpha, beta) = self.params;
+        return beta.mul_add(inp.as_float(), alpha);
+    }
+
+    fn input_type(&self) -> ModelDataType {
+        return ModelDataType::Float;
+    }
+    fn output_type(&self) -> ModelDataType {
+        return ModelDataType::Float;
+    }
+
+    fn params(&self) -> Vec<ModelParam> {
+        return vec![self.params.0.into(), self.params.1.into()];
+    }
+
+    fn code(&self) -> String {
+        return String::from(
+            "
+inline double linear(double alpha, double beta, double inp) {
+    return alpha + beta * inp;
+}",
+        );
+    }
+    
+    fn function_name(&self) -> String {
+        return String::from("linear");
     }
 }

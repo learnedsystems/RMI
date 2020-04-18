@@ -21,6 +21,7 @@ pub use bottom_up_plr::BottomUpPLR;
 pub use cubic_spline::CubicSplineModel;
 pub use histogram::EquidepthHistogramModel;
 pub use linear::LinearModel;
+pub use linear::RobustLinearModel;
 pub use linear::LogLinearModel;
 pub use linear_spline::LinearSplineModel;
 pub use normal::LogNormalModel;
@@ -130,7 +131,7 @@ macro_rules! define_iterator_type {
             fn set_scale(&mut self, scale: f64) {
                 self.scale = scale;
             }
-            #[allow(dead_code)]
+
             pub fn bound(&mut self, start: usize, stop: usize) {
                 assert!(start < stop);
                 assert!(stop <= self.data.len());
