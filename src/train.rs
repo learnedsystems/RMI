@@ -15,6 +15,7 @@ pub struct TrainedRMI {
     pub model_avg_log2_error: f64,
     pub model_max_error: u64,
     pub model_max_error_idx: usize,
+    pub model_max_log2_error: f64,
     pub last_layer_max_l1s: Vec<u64>,
     pub rmi: Vec<Vec<Box<dyn Model>>>,
 }
@@ -241,6 +242,7 @@ fn train_two_layer(md_container: &mut ModelDataWrapper,
     let model_avg_log2_error: f64 = last_layer_max_l1s
         .iter().map(|(n, err)| (*n as f64)*((2*err + 2) as f64).log2()).sum::<f64>() / num_rows as f64;
 
+    let model_max_log2_error: f64 = (model_max_error as f64).log2();
     let final_errors = last_layer_max_l1s.into_iter()
         .map(|(_n, err)| err).collect();
 
@@ -251,6 +253,7 @@ fn train_two_layer(md_container: &mut ModelDataWrapper,
         model_avg_log2_error,
         model_max_error,
         model_max_error_idx,
+        model_max_log2_error,
         last_layer_max_l1s: final_errors,
         rmi: vec![vec![top_model], leaf_models]
     };
@@ -319,6 +322,7 @@ pub fn train(data: &mut ModelDataWrapper,
     let mut model_avg_error: f64 = 0.0;
     let mut model_avg_l2_error: f64 = 0.0;
     let mut model_avg_log2_error: f64 = 0.0;
+    let mut model_max_log2_error: f64 = 0.0;
     let mut model_max_error = 0;
     let mut model_max_error_idx = 0;
 
@@ -345,6 +349,7 @@ but an error of {} was observed on input {} at index {}. Prediction: {} Actual: 
             model_avg_l2_error += ((max_error as f64).powf(2.0) - model_avg_l2_error) / (n as f64);
             let log2_error = ((2 * max_error + 2) as f64).log2();
             model_avg_log2_error += (log2_error - model_avg_log2_error) / (n as f64);
+            model_max_log2_error = f64::max(model_max_log2_error, log2_error);
             n += 1;
         }
         if max_error > model_max_error {
@@ -363,6 +368,7 @@ but an error of {} was observed on input {} at index {}. Prediction: {} Actual: 
         model_avg_log2_error,
         model_max_error,
         model_max_error_idx,
+        model_max_log2_error,
         last_layer_max_l1s,
         rmi,
     };
