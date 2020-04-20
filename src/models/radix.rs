@@ -1,9 +1,11 @@
-// < begin copyright >
-// Copyright Ryan Marcus 2019
-//
+// < begin copyright > 
+// Copyright Ryan Marcus 2020
+// 
 // See root directory of this project for license terms.
-//
-// < end copyright >
+// 
+// < end copyright > 
+ 
+
 use crate::models::utils::{common_prefix_size, num_bits};
 use crate::models::*;
 use log::*;

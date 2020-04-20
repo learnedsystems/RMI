@@ -1,9 +1,12 @@
-// < begin copyright >
-// Copyright Ryan Marcus 2019
-//
+// < begin copyright > 
+// Copyright Ryan Marcus 2020
+// 
 // See root directory of this project for license terms.
-//
-// < end copyright >
+// 
+// < end copyright > 
+ 
+ 
+
 use crate::models::*;
 
 fn slr<T: Iterator<Item = (f64, f64)>>(loc_data: T) -> (f64, f64) {

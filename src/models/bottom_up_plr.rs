@@ -1,3 +1,10 @@
+// < begin copyright > 
+// Copyright Ryan Marcus 2020
+// 
+// See root directory of this project for license terms.
+// 
+// < end copyright > 
+ 
 use crate::models::*;
 use superslice::*;
 use crate::models::utils::{plr, radix_index};

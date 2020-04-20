@@ -1,9 +1,12 @@
-// < begin copyright >
-// Copyright Ryan Marcus 2019
-//
+// < begin copyright > 
+// Copyright Ryan Marcus 2020
+// 
 // See root directory of this project for license terms.
-//
-// < end copyright >
+// 
+// < end copyright > 
+ 
+ 
+
 mod balanced_radix;
 mod bottom_up_plr;
 mod cubic_spline;
