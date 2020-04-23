@@ -82,11 +82,22 @@ fn main() {
              .short("d")
              .value_name("dir")
              .help("exports parameters to files in this directoyr instead of embedding them"))
+        .arg(Arg::with_name("threads")
+             .long("threads")
+             .short("t")
+             .value_name("count")
+             .help("number of threads to use for training, default = 4"))
+        .arg(Arg::with_name("disable-parallel-training")
+             .long("disable-parallel-training")
+             .help("disables training multiple RMIs in parallel"))
         .get_matches();
 
-    // set the max number of threads to 4, otherwise Rayon goes crazy on larger machines
-    // and allocates too many workers for folds / reduces
-    rayon::ThreadPoolBuilder::new().num_threads(4).build_global().unwrap();
+    // set the max number of threads to 4 by default, otherwise Rayon goes
+    // crazy on larger machines and allocates too many workers for folds / reduces
+    let num_threads = matches.value_of("threads")
+        .map(|x| x.parse::<usize>().unwrap())
+        .unwrap_or(4);
+    rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global().unwrap();
     
     let fp = matches.value_of("input").unwrap();
     let downsample = matches
@@ -137,9 +148,10 @@ fn main() {
             let pbar = ProgressBar::new(to_test.len() as u64);
             pbar.set_style(ProgressStyle::default_bar()
                           .template("{pos} / {len} ({msg}) {wide_bar} {eta}"));
-            
-            let results: Vec<JsonValue> = to_test
-                .par_iter().map(|(models, branch_factor, namespace, bsearch)| {
+
+            let train_func =
+                |(models, branch_factor,
+                  namespace, bsearch): &(String, u64, Option<String>, bool)| {
                     trace!("Training RMI {} with branching factor {}",
                            models, *branch_factor);
                     let mut md_container = ModelDataWrapper::new(&data);
@@ -150,10 +162,10 @@ fn main() {
                         .duration_since(start_time)
                         .map(|d| d.as_nanos())
                         .unwrap_or(std::u128::MAX);
-
+                    
                     let size_bs = codegen::rmi_size(&trained_model.rmi, true);
                     let size_ls = codegen::rmi_size(&trained_model.rmi, false);
-
+                    
                     let result_obj = object! {
                         "layers" => models.clone(),
                         "branching factor" => *branch_factor,
@@ -180,12 +192,24 @@ fn main() {
                             num_rows,
                             build_time,
                             data_dir).unwrap();
-
+                        
                     }
                     
                     pbar.inc(1);
                     return result_obj;
-                }).collect();
+                };
+
+            let results: Vec<JsonValue> =
+                if matches.is_present("disable-parallel-training") {
+                    trace!("Training models sequentially");
+                    to_test.iter().map(train_func).collect()
+                } else {
+                    trace!("Training models in parallel");
+                    to_test.par_iter().map(train_func).collect()
+                };
+            
+            //let results: Vec<JsonValue> = to_test
+            //.par_iter().map(
             pbar.finish();
 
             let f = File::create(format!("{}_results", param_grid)).expect("Could not write results file");
