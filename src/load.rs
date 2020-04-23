@@ -20,9 +20,9 @@ pub enum DataType {
 }
 
 pub fn load_data(filepath: &str, dt: DataType, downsample: usize) -> (usize, ModelData) {
-    let fd = File::open(filepath).expect(
-        &format!("Unable to open data file at {}", filepath)
-    );
+    let fd = File::open(filepath).unwrap_or_else(|_| {
+        panic!("Unable to open data file at {}", filepath)
+    });
     
     let mut reader = BufReader::new(fd);
 

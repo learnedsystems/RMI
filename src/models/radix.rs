@@ -113,7 +113,7 @@ impl RadixTable {
         return RadixTable {
             prefix_bits: prefix,
             table_bits: bits,
-            hint_table: hint_table
+            hint_table
         };
     }
 }
@@ -143,13 +143,13 @@ impl Model for RadixTable {
     }
 
     fn code(&self) -> String {
-        return String::from(format!(
+        return format!(
             "
 inline uint64_t radix_table(const uint32_t* table, const uint64_t inp) {{
     uint32_t prefix_length = table[0];
     return (table+1)[((inp << prefix_length) >> prefix_length) >> (64 - {})];
 }}", self.prefix_bits + self.table_bits
-        ));
+        );
     }
 
     fn function_name(&self) -> String {

@@ -20,7 +20,7 @@ fn bottom_up_plr(data: &ModelDataWrapper) -> (Vec<u64>, Vec<f64>) {
     let mut delta = 1.0;
     let (mut points, mut coeffs) = plr(data, delta, data.len() < 10000);
 
-    while points.len() > 524288 {
+    while points.len() > 524_288 {
         delta *= 2.0;
         let (p, c) = plr(data, delta, false);
         points = p;
@@ -94,7 +94,7 @@ impl Model for BottomUpPLR {
                                                       self.coeffs.clone().into()]; }
     
     fn code(&self) -> String {
-        return String::from(format!("
+        return format!("
 inline uint64_t plr(const uint64_t size, 
                     const uint64_t radix[],
                     const uint64_t pivots[], const double coeffs[], uint64_t key) {{
@@ -107,7 +107,7 @@ inline uint64_t plr(const uint64_t size,
     double beta = coeffs[2*li + 1];
     return alpha * (double)key + beta;
 }}
-", NUM_RADIX_BITS));
+", NUM_RADIX_BITS);
     }
 
 

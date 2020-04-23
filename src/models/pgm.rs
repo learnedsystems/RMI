@@ -97,9 +97,9 @@ impl Model for PGM {
     fn params(&self) -> Vec<ModelParam> {
         let layer_sizes: Vec<u64> = self.points.iter().map(|v| v.len() as u64).collect();
 
-        let flat_points: Vec<u64> = self.points.iter().flat_map(|v| v).copied().collect();
+        let flat_points: Vec<u64> = self.points.iter().flatten().copied().collect();
 
-        let flat_coeffs: Vec<f64> = self.coeffs.iter().flat_map(|v| v).copied().collect();
+        let flat_coeffs: Vec<f64> = self.coeffs.iter().flatten().copied().collect();
 
         return vec![
             ModelParam::IntArray(layer_sizes),

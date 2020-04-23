@@ -15,11 +15,11 @@ pub fn train_multi_layer(data: &mut ModelDataWrapper,
                          branch_factor: u64) -> TrainedRMI {
     
     let mut rmi: Vec<Vec<Box<dyn Model>>> = Vec::new();
-    let mut data_partitions = vec![data.clone().to_data()];
+    let mut data_partitions = vec![data.clone().into_data()];
     let num_rows = data_partitions[0].len();
 
     let mut current_model_count = 1;
-    for (_layer_idx, model_type) in model_list.into_iter().enumerate() {
+    for (_layer_idx, model_type) in model_list.iter().enumerate() {
         info!("Training {} model layer", model_type);
         // data_partition contains all of our data partitioned into groups
         // based on the previous RMI layer's output

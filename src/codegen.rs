@@ -264,13 +264,13 @@ impl LayerParams {
             LayerParams::MixedArray(idx, params_per_model, params) => {
                 // determine the number of bytes for each model
                 let mut bytes_per_model = 0;
-                for pidx in 0..*params_per_model {
-                    bytes_per_model += params[pidx].size();
+                for item in params.iter().take(*params_per_model) {
+                    bytes_per_model += item.size();
                 }
                 // determine the byte offset of this parameter
                 let mut offset = 0;
-                for pidx in 0..parameter_index {
-                    offset += params[pidx].size();
+                for item in params.iter().take(parameter_index) {
+                    offset += item.size();
                 }
                 
                 // we have to determine the type of the index being accessed
@@ -443,7 +443,7 @@ fn generate_code<T: Write>(
 
         // store the data on disk, add code to load it
         StorageConf::Disk(path) => {
-            read_code.push(format!("bool load(char const* dataPath) {{"));
+            read_code.push("bool load(char const* dataPath) {".to_string());
             
             for lp in layer_params.iter() {
                 match lp {
@@ -459,10 +459,10 @@ fn generate_code<T: Write>(
                         lp.write_to(&mut bw)?; // write to data file
                         lp.to_decl(data_output)?; // write to source code
 
-                        read_code.push(format!("  {{"));
+                        read_code.push("  {".to_string());
                         read_code.push(format!("    std::ifstream infile(std::filesystem::path(dataPath) / \"{ns}_{fn}\", std::ios::in | std::ios::binary);",
                                                ns=namespace, fn=array_name!(idx)));
-                        read_code.push(format!("    if (!infile.good()) return false;"));
+                        read_code.push("    if (!infile.good()) return false;".to_string());
                         if lp.requires_malloc() {
                             read_code.push(format!("    {} = ({}*) malloc({});",
                                                    array_name!(idx), lp.pointer_type(), lp.size()));
@@ -471,19 +471,19 @@ fn generate_code<T: Write>(
                         }
                         read_code.push(format!("    infile.read((char*){fn}, {size});",
                                                fn=array_name!(idx), size=lp.size()));
-                        read_code.push(format!("    if (!infile.good()) return false;"));
-                        read_code.push(format!("  }}"));
+                        read_code.push("    if (!infile.good()) return false;".to_string());
+                        read_code.push("  }".to_string());
                     }
                 }
             }
-            read_code.push(format!("  return true;"));
-            read_code.push(format!("}}"));
+            read_code.push("  return true;".to_string());
+            read_code.push("}".to_string());
 
         }
     };
 
     let mut free_code = Vec::new();
-    free_code.push(format!("void cleanup() {{"));
+    free_code.push("void cleanup() {".to_string());
     // generate free code
     for lp in layer_params.iter() {
         if !lp.requires_malloc() { continue; }
@@ -493,7 +493,7 @@ fn generate_code<T: Write>(
         }
         panic!();
     }
-    free_code.push(format!("}}"));
+    free_code.push("}".to_string());
 
     writeln!(data_output, "}} // namespace")?;
 

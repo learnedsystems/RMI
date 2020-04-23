@@ -85,7 +85,7 @@ impl <'a> ModelDataWrapper<'a> {
         return self.model_data.as_int_int();
     }
 
-    pub fn to_data(self) -> ModelData {
+    pub fn into_data(self) -> ModelData {
         return self.model_data.clone();
     }
 }

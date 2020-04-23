@@ -112,8 +112,7 @@ fn main() {
         let pg = {
             let raw_json = fs::read_to_string(param_grid.clone()).unwrap();
             let mut as_json = json::parse(raw_json.as_str()).unwrap();
-            let configs = as_json["configs"].take();
-            configs
+            as_json["configs"].take()
         };
 
         let mut to_test = Vec::new();
@@ -135,8 +134,8 @@ fn main() {
 
             trace!("# RMIs to train: {}", to_test.len());
 
-            let bar = ProgressBar::new(to_test.len() as u64);
-            bar.set_style(ProgressStyle::default_bar()
+            let pbar = ProgressBar::new(to_test.len() as u64);
+            pbar.set_style(ProgressStyle::default_bar()
                           .template("{pos} / {len} ({msg}) {wide_bar} {eta}"));
             
             let results: Vec<JsonValue> = to_test
@@ -184,10 +183,10 @@ fn main() {
 
                     }
                     
-                    bar.inc(1);
+                    pbar.inc(1);
                     return result_obj;
                 }).collect();
-            bar.finish();
+            pbar.finish();
 
             let f = File::create(format!("{}_results", param_grid)).expect("Could not write results file");
             let mut bw = BufWriter::new(f);
