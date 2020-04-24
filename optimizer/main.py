@@ -139,7 +139,6 @@ def cache_rmi(data_path, result):
 def parallel_test_rmis(data_path, configs, threads=8, phase=""):
     if len(configs) < threads:
         threads = len(configs)
-    print(configs)
         
     with FS_LOCK:
         os.system("rm -f *.json *.json_results")
@@ -490,39 +489,36 @@ def optimize(data_path, threads=8):
     
 
 if __name__ == "__main__":
-    #optimize("/home/ryan/SOSD-private/data/osm_cellids_200M_uint64")
-    #os.system("mv step2_out.csv osm.csv")
-    #optimize("/home/ryan/SOSD-private/data/osm_cellids_400M_uint64")
-    #os.system("mv step2_out.csv osm400.csv")
-    #optimize("/home/ryan/SOSD-private/data/osm_cellids_600M_uint64")
-    #os.system("mv step2_out.csv osm600.csv")
-    #optimize("/home/ryan/SOSD-private/data/osm_cellids_800M_uint64")
-    #os.system("mv step2_out.csv osm800.csv")
-    # 
-    #optimize("/home/ryan/SOSD-private/data/books_200M_uint64")
-    #os.system("mv step2_out.csv books.csv")
-    #optimize("/home/ryan/SOSD-private/data/books_400M_uint64")
-    #os.system("mv step2_out.csv books400.csv")
-    #optimize("/home/ryan/SOSD-private/data/books_600M_uint64")
-    #os.system("mv step2_out.csv books600.csv")
-    #optimize("/home/ryan/SOSD-private/data/books_800M_uint64")
-    #os.system("mv step2_out.csv books800.csv")
-    # 
-    # 
-    #optimize("/home/ryan/SOSD-private/data/wiki_ts_200M_uint64")
-    #os.system("mv step2_out.csv wiki.csv")
+    optimize("/home/ryan/SOSD-private/data/osm_cellids_200M_uint64")
+    os.system("mv step2_out.csv osm.csv")
+    optimize("/home/ryan/SOSD-private/data/osm_cellids_400M_uint64")
+    os.system("mv step2_out.csv osm400.csv")
+    optimize("/home/ryan/SOSD-private/data/osm_cellids_600M_uint64")
+    os.system("mv step2_out.csv osm600.csv")
+    optimize("/home/ryan/SOSD-private/data/osm_cellids_800M_uint64")
+    os.system("mv step2_out.csv osm800.csv")
+     
+    optimize("/home/ryan/SOSD-private/data/books_200M_uint64")
+    os.system("mv step2_out.csv books.csv")
+    optimize("/home/ryan/SOSD-private/data/books_400M_uint64")
+    os.system("mv step2_out.csv books400.csv")
+    optimize("/home/ryan/SOSD-private/data/books_600M_uint64")
+    os.system("mv step2_out.csv books600.csv")
+    optimize("/home/ryan/SOSD-private/data/books_800M_uint64")
+    os.system("mv step2_out.csv books800.csv")
+     
+     
+    optimize("/home/ryan/SOSD-private/data/wiki_ts_200M_uint64")
+    os.system("mv step2_out.csv wiki.csv")
      
     optimize("/home/ryan/SOSD-private/data/fb_200M_uint64")
     os.system("mv step2_out.csv fb.csv")
 
-    #optimize("/home/ryan/SOSD-private/data/books_200M_uint32")
-    #os.system("mv step2_out.csv books32.csv")
+    optimize("/home/ryan/SOSD-private/data/books_200M_uint32")
+    os.system("mv step2_out.csv books32.csv")
 
-    #optimize("/home/ryan/SOSD-private/data/fb_200M_uint32")
-    #os.system("mv step2_out.csv fb32.csv")
-
-    #optimize("/home/ryan/SOSD-private/data/normal_200M_uint32")
-    #os.system("mv step2_out.csv norm32.csv")
+    optimize("/home/ryan/SOSD-private/data/normal_200M_uint32")
+    os.system("mv step2_out.csv norm32.csv")
 
 
 
