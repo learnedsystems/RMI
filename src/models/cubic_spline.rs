@@ -167,7 +167,10 @@ impl Model for CubicSplineModel {
         return String::from(
             "
 inline double cubic(double a, double b, double c, double d, double x) {
-    return (((a * x + b) * x + c) * x) + d;
+    auto v1 = std::fma(a, x, b);
+    auto v2 = std::fma(v1, x, c);
+    auto v3 = std::fma(v2, x, d);
+    return v3;
 }",
         );
     }

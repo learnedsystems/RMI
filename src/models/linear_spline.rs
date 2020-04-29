@@ -65,7 +65,7 @@ impl Model for LinearSplineModel {
         return String::from(
             "
 inline double linear(double alpha, double beta, double inp) {
-    return alpha + beta * inp;
+    return std::fma(beta, inp, alpha);
 }",
         );
     }

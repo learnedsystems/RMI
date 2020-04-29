@@ -103,7 +103,7 @@ impl Model for LinearModel {
         return String::from(
             "
 inline double linear(double alpha, double beta, double inp) {
-    return alpha + beta * inp;
+    return std::fma(beta, inp, alpha);
 }",
         );
     }
@@ -188,7 +188,7 @@ impl Model for LogLinearModel {
         return String::from(
             "
 inline double loglinear(double alpha, double beta, double inp) {
-    return exp1(alpha + beta * inp);
+    return exp1(std::fma(beta, inp, alpha));
 }",
         );
     }
@@ -272,7 +272,7 @@ impl Model for RobustLinearModel {
         return String::from(
             "
 inline double linear(double alpha, double beta, double inp) {
-    return alpha + beta * inp;
+    return std::fma(beta, inp, alpha);
 }",
         );
     }

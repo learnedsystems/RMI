@@ -453,7 +453,7 @@ fn generate_code<T: Write>(
                     LayerParams::Array(idx, _, _) |
                     LayerParams::MixedArray(idx, _, _) => {
                         let data_path = Path::new(&path).join(format!("{}_{}", namespace, array_name!(idx)));
-                        let f = File::create(data_path).expect("Could not write data file");
+                        let f = File::create(data_path).expect("Could not write data file -- does the RMI data directory exist?");
                         let mut bw = BufWriter::new(f);
 
                         lp.write_to(&mut bw)?; // write to data file
@@ -511,6 +511,7 @@ fn generate_code<T: Write>(
     writeln!(code_output, "#include \"{}.h\"", namespace)?;
     writeln!(code_output, "#include \"{}_data.h\"", namespace)?;
     writeln!(code_output, "#include <math.h>")?;
+    writeln!(code_output, "#include <cmath>")?;
     writeln!(code_output, "#include <fstream>")?;
     writeln!(code_output, "#include <filesystem>")?;
     writeln!(code_output, "#include <iostream>")?;
