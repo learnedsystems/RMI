@@ -81,7 +81,7 @@ fn main() {
              .long("data-path")
              .short("d")
              .value_name("dir")
-             .help("exports parameters to files in this directoyr instead of embedding them"))
+             .help("exports parameters to files in this directory instead of embedding them"))
         .arg(Arg::with_name("threads")
              .long("threads")
              .short("t")
