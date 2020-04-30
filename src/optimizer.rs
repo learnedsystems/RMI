@@ -162,25 +162,14 @@ impl RMIStatistics {
         print!("{}", table);
     }
     
-    /*pub fn header_display_string() -> String {
-        return format!("{:30} {:>10}    {:>7}    {:>7}    {}",
-                       "Model", "Branch", "AvgLog2", "MaxLog2", "Size");
-    }
-    
-    pub fn as_display_string(&self) -> String {
-        return format!("{:30} {:10}    {:2.5}    {:2.5}    {}",
-                       self.models, self.branching_factor,
-                       self.average_log2_error, self.max_log2_error,
-                       self.size);
-    }*/
-
     pub fn to_grid_spec(&self, namespace: &str) -> JsonValue {
         return object!(
             "layers" => self.models.clone(),
             "branching factor" => self.branching_factor,
             "namespace" => namespace,
             "size" => self.size,
-            "average log2 error" => self.average_log2_error
+            "average log2 error" => self.average_log2_error,
+            "binary" => true
         );
     }
 }
