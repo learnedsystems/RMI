@@ -14,7 +14,7 @@ const ANYWHERE_LAYERS: &[&str] = &["linear", "cubic", "linear_spline"];
 
 fn get_branching_factors() -> Vec<u64> {
     let mut branching_factors: Vec<u64> = Vec::new();
-    for i in 7..24 {
+    for i in 6..25 {
         branching_factors.push((2 as u64).pow(i));
     }
     return branching_factors;
