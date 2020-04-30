@@ -13,6 +13,7 @@ mod codegen;
 mod load;
 mod models;
 mod train;
+mod optimizer;
 
 use load::{load_data, DataType};
 use models::ModelDataWrapper;
@@ -26,6 +27,7 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::time::SystemTime;
 use std::fs;
+use std::path::Path;
 use rayon::prelude::*;
 
 use indicatif::{ProgressBar, ProgressStyle};
@@ -90,6 +92,9 @@ fn main() {
         .arg(Arg::with_name("disable-parallel-training")
              .long("disable-parallel-training")
              .help("disables training multiple RMIs in parallel"))
+        .arg(Arg::with_name("optimize")
+             .long("optimize")
+             .help("Search for Pareto efficient RMI configurations"))
         .get_matches();
 
     // set the max number of threads to 4 by default, otherwise Rayon goes
@@ -118,6 +123,32 @@ fn main() {
     } else {
         load_data(&fp, DataType::UINT32, downsample)
     };
+
+    if matches.is_present("optimize") {
+        let results = optimizer::find_pareto_efficient_configs(&data, 10);
+        optimizer::RMIStatistics::display_table(&results);
+
+        let nmspc_prefix = if matches.value_of("namespace").is_some() {
+            matches.value_of("namespace").unwrap()
+        } else {
+            let path = Path::new(fp);
+            path.file_name().map(|s| s.to_str()).unwrap_or(Some("rmi")).unwrap()
+        };
+        
+        let grid_specs: Vec<JsonValue> = results.into_iter()
+            .enumerate()
+            .map(|(idx, v)| {
+                let nmspc = format!("{}_{}", nmspc_prefix, idx);
+                v.to_grid_spec(&nmspc)
+            }).collect();
+
+        let grid_specs_json = object!("configs" => grid_specs);
+        let f = File::create("optimize_output.json")
+            .expect("Could not write optimization results file");
+        let mut bw = BufWriter::new(f);
+        grid_specs_json.write(&mut bw).unwrap();
+        return;
+    }
     
     if let Some(param_grid) = matches.value_of("param-grid").map(|x| x.to_string()) {
         let pg = {

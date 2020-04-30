@@ -20,6 +20,8 @@ pub struct TrainedRMI {
     pub model_max_log2_error: f64,
     pub last_layer_max_l1s: Vec<u64>,
     pub rmi: Vec<Vec<Box<dyn Model>>>,
+    pub models: String,
+    pub branching_factor: u64
 }
 
 fn train_model(model_type: &str, data: &ModelDataWrapper) -> Box<dyn Model> {

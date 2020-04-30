@@ -79,8 +79,8 @@ fn build_models_from(data: &ModelDataWrapper,
 }
 
 pub fn train_two_layer(md_container: &mut ModelDataWrapper,
-                   layer1_model: &str, layer2_model: &str,
-                   num_leaf_models: u64) -> TrainedRMI {
+                       layer1_model: &str, layer2_model: &str,
+                       num_leaf_models: u64) -> TrainedRMI {
     validate(&[String::from(layer1_model), String::from(layer2_model)]);
 
     let num_rows = md_container.len();
@@ -192,7 +192,9 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
         model_max_error_idx,
         model_max_log2_error,
         last_layer_max_l1s: final_errors,
-        rmi: vec![vec![top_model], leaf_models]
+        rmi: vec![vec![top_model], leaf_models],
+        models: format!("{},{}", layer1_model, layer2_model),
+        branching_factor: num_leaf_models
     };
 
 }

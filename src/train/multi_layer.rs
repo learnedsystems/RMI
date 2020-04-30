@@ -112,5 +112,7 @@ pub fn train_multi_layer(data: &mut ModelDataWrapper,
         model_max_log2_error,
         last_layer_max_l1s,
         rmi,
+        models: format!("{},{}", model_list.join(","), last_model),
+        branching_factor: branch_factor
     };
 }
