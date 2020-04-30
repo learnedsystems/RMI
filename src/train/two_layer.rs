@@ -9,7 +9,6 @@ use crate::models::*;
 use crate::train::{validate, train_model, TrainedRMI};
 use log::*;
 use superslice::*;
-use rayon::prelude::*;
 
 
 fn build_models_from(data: &ModelDataWrapper,
@@ -136,30 +135,17 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
     // TODO compute the total number of items that each each LL model
     
     // evaluate model, compute last level errors
-    let last_layer_max_l1s = md_container.as_int_int().par_iter()
-        .map(|&(x, y)| {
-            let leaf_idx = top_model.predict_to_int(x.into());
-            let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
-            
-            let pred = leaf_models[target].predict_to_int(x.into());
-            let err = u64::max(y, pred) - u64::min(y, pred);
-            (target, err)
-        }).fold(|| vec![(0, 0) ; num_leaf_models as usize],
-                |mut a: Vec<(u64, u64)>, b: (usize, u64)| {
-                    let model_idx = b.0;
-                    let err = b.1;
-                    let current = a[model_idx];
-                    a[model_idx] = (current.0 + 1,
-                                    u64::max(err, current.1));
-                    a
-                }
-        ).reduce(|| vec![(0, 0) ; num_leaf_models as usize],
-                 |v1, v2| {
-                     v1.iter().zip(v2.iter())
-                         .map(|(a, b)| (a.0 + b.0, u64::max(a.1, b.1)))
-                         .collect()
-                 }
-        );
+    let mut last_layer_max_l1s = vec![(0, 0) ; num_leaf_models as usize];
+    for &(x, y) in md_container.as_int_int() {
+        let leaf_idx = top_model.predict_to_int(x.into());
+        let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
+        
+        let pred = leaf_models[target].predict_to_int(x.into());
+        let err = u64::max(y, pred) - u64::min(y, pred);
+
+        let cur_val = last_layer_max_l1s[target];
+        last_layer_max_l1s[target] = (cur_val.0 + 1, u64::max(err, cur_val.1));
+    }
                         
     info!("Evaluating two-layer RMI...");
     let (m_idx, m_err) = last_layer_max_l1s
