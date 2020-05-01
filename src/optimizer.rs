@@ -43,19 +43,25 @@ fn narrow_front(results: &[RMIStatistics], desired_size: usize) -> Vec<RMIStatis
     
     let mut tmp = results.to_vec();
     tmp.sort_by(
-        |a, b| a.average_log2_error.partial_cmp(&b.average_log2_error).unwrap()
+        |a, b| a.size.partial_cmp(&b.size).unwrap()
     );
 
     let best_mod = tmp.remove(0);
     while tmp.len() > desired_size - 1 {
-        // find the two items closest in avg log2 error and remove the larger one.
+        // find the two items closest in size and remove less accuracte one.
         let smallest_gap =
             (0..tmp.len()-1).zip(1..tmp.len())
             .map(|(idx1, idx2)| (idx1, idx2,
-                                 tmp[idx1].average_log2_error-tmp[idx2].average_log2_error))
+                                 tmp[idx1].size-tmp[idx2].size))
             .max_by(|(_, _, v1), (_, _, v2)| v1.partial_cmp(v2).unwrap()).unwrap();
 
-        tmp.remove(smallest_gap.0);
+        let err1 = tmp[smallest_gap.0].average_log2_error;
+        let err2 = tmp[smallest_gap.1].average_log2_error;
+        if err1 > err2 {
+            tmp.remove(smallest_gap.0);
+        } else {
+            tmp.remove(smallest_gap.0);
+        }
     }
     tmp.insert(0, best_mod);
 
