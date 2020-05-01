@@ -53,7 +53,7 @@ fn narrow_front(results: &[RMIStatistics], desired_size: usize) -> Vec<RMIStatis
             (0..tmp.len()-1).zip(1..tmp.len())
             .map(|(idx1, idx2)| (idx1, idx2,
                                  tmp[idx1].size-tmp[idx2].size))
-            .max_by(|(_, _, v1), (_, _, v2)| v1.partial_cmp(v2).unwrap()).unwrap();
+            .min_by(|(_, _, v1), (_, _, v2)| v1.partial_cmp(v2).unwrap()).unwrap();
 
         let err1 = tmp[smallest_gap.0].average_log2_error;
         let err2 = tmp[smallest_gap.1].average_log2_error;
