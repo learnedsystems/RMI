@@ -94,7 +94,8 @@ fn main() {
              .help("disables training multiple RMIs in parallel"))
         .arg(Arg::with_name("optimize")
              .long("optimize")
-             .help("Search for Pareto efficient RMI configurations"))
+             .value_name("file")
+             .help("Search for Pareto efficient RMI configurations. Specify the name of the output file."))
         .get_matches();
 
     // set the max number of threads to 4 by default, otherwise Rayon goes
@@ -143,7 +144,8 @@ fn main() {
             }).collect();
 
         let grid_specs_json = object!("configs" => grid_specs);
-        let f = File::create("optimize_output.json")
+        let fp = matches.value_of("optimize").unwrap();
+        let f = File::create(fp)
             .expect("Could not write optimization results file");
         let mut bw = BufWriter::new(f);
         grid_specs_json.write(&mut bw).unwrap();
