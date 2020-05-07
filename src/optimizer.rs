@@ -40,7 +40,7 @@ fn narrow_front(results: &[RMIStatistics], desired_size: usize) -> Vec<RMIStatis
     if results.len() <= desired_size {
         return results.to_vec();
     }
-    
+
     let mut tmp = results.to_vec();
     tmp.sort_by(
         |a, b| a.size.partial_cmp(&b.size).unwrap()
@@ -52,7 +52,7 @@ fn narrow_front(results: &[RMIStatistics], desired_size: usize) -> Vec<RMIStatis
         let smallest_gap =
             (0..tmp.len()-1).zip(1..tmp.len())
             .map(|(idx1, idx2)| (idx1, idx2,
-                                 tmp[idx2].size-tmp[idx1].size))
+                                 (tmp[idx2].size as f64) / (tmp[idx1].size as f64)))
             .min_by(|(_, _, v1), (_, _, v2)| v1.partial_cmp(v2).unwrap()).unwrap();
 
         let err1 = tmp[smallest_gap.0].average_log2_error;
