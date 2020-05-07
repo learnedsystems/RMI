@@ -20,7 +20,7 @@ fn cubic(data: &ModelDataWrapper) -> (f64, f64, f64, f64) {
     }
 
     if data.len() == 1 {
-        return (0.0, 0.0, data.get(0).1, 0.0);
+        return (0.0, 0.0, 0.0, data.get(0).1);
     }
 
     // ensure we have at least two unique values
@@ -30,7 +30,7 @@ fn cubic(data: &ModelDataWrapper) -> (f64, f64, f64, f64) {
 
         if !uniq {
             // all the same value!
-            return (0.0, 0.0, data.get(0).1, 0.0);
+            return (0.0, 0.0, 0.0, data.get(0).1);
         }
     }
 
@@ -181,6 +181,11 @@ inline double cubic(double a, double b, double c, double d, double x) {
     fn needs_bounds_check(&self) -> bool {
         return false;
     }
+
+    fn set_to_constant_model(&mut self, constant: u64) -> bool {
+        self.params = (0.0, 0.0, 0.0, constant as f64);
+        return true;
+    }    
 }
 
 #[cfg(test)]

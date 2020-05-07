@@ -10,6 +10,34 @@ use crate::train::{validate, train_model, TrainedRMI};
 use log::*;
 use superslice::*;
 
+fn error_between(v1: u64, v2: u64) -> u64 {
+    return u64::max(v1, v2) - u64::min(v1, v2);
+}
+
+fn find_first_below<T>(data: &[Option<T>], idx: usize) -> &Option<T> {
+    assert!(idx < data.len());
+    if idx == 0 { return &None; }
+    
+    let mut i = idx - 1;
+    loop {
+        if data[i].is_some() { return &data[i]; }
+        if i == 0 { return &None; }
+        i -= 1;
+    }
+}
+
+fn find_first_above<T>(data: &[Option<T>], idx: usize) -> &Option<T> {
+    assert!(idx < data.len());
+    if idx == data.len() - 1 { return &None; }
+        
+    let mut i = idx + 1;
+    loop {
+        if data[i].is_some() { return &data[i]; }
+        if i == data.len() - 1 { return &None; }
+        i += 1;
+    }
+}
+
 
 fn build_models_from(data: &ModelDataWrapper,
                      top_model: &Box<dyn Model>,
@@ -99,7 +127,7 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
         return model_target.cmp(&midpoint_model);
     });
 
-    let leaf_models = if split_idx >= md_container.len() {
+    let mut leaf_models = if split_idx >= md_container.len() {
         warn!("All of the data is being mapped into less than half the number of leaf models. Parallelism disabled.");
         build_models_from(&md_container, &top_model, layer2_model,
                           0, md_container.len(), 0,
@@ -129,11 +157,65 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
         leaf_models.append(&mut hf2);
         leaf_models
     };
+
+    info!("Fixing empty models...");
+    // compute the first and last key that is mapped to each leaf model
+    let mut first_key_for_leaf: Vec<Option<(u64, u64)>> = vec![None ; num_leaf_models as usize];
+    let mut last_key_for_leaf: Vec<Option<(u64, u64)>> = vec![None ; num_leaf_models as usize];
+    let mut max_run_length: Vec<u64> = vec![0 ; num_leaf_models as usize];
+
+    let mut last_target = 0;
+    let mut current_run_length = 0;
+    let mut current_run_key = md_container.get_key(0);
+    for &(x, y) in md_container.as_int_int() {
+        let leaf_idx = top_model.predict_to_int(x.into());
+        let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
+
+        if target == last_target && x == current_run_key {
+            current_run_length += 1;
+        } else if target != last_target || x != current_run_key {
+            max_run_length[last_target] = u64::max(
+                max_run_length[last_target],
+                current_run_length
+            );
+            
+            current_run_length = 1;
+            current_run_key = x;
+            last_target = target;
+        }
+        
+        
+        if first_key_for_leaf[target].is_none() {
+            first_key_for_leaf[target] = Some((y, x));
+        }
+        last_key_for_leaf[target] = Some((y, x));
+    }
+
+    
+    // replace any empty model with a model that returns the correct constant
+    // (for UB predictions), if the underlying model supports it.
+    let mut could_not_replace = false;
+    for idx in 0..(num_leaf_models as usize)-1 {
+        assert_eq!(first_key_for_leaf[idx].is_none(),
+                   last_key_for_leaf[idx].is_none());
+
+        if last_key_for_leaf[idx].is_none() {
+            // model is empty!
+            let upper_bound = find_first_above(&last_key_for_leaf, idx)
+                .map(|(correct_idx, _key)| correct_idx)
+                .unwrap_or(md_container.len() as u64);
+            if !leaf_models[idx].set_to_constant_model(upper_bound) {
+                could_not_replace = true;
+            }
+        }
+    }
+
+    if could_not_replace {
+        warn!("Some empty models could not be replaced with constants, negative lookup performance may be poor.");
+    }
+    
     
     info!("Computing last level errors...");
-
-    // TODO compute the total number of items that each each LL model
-    
     // evaluate model, compute last level errors
     let mut last_layer_max_l1s = vec![(0, 0) ; num_leaf_models as usize];
     for &(x, y) in md_container.as_int_int() {
@@ -141,10 +223,59 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
         let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
         
         let pred = leaf_models[target].predict_to_int(x.into());
-        let err = u64::max(y, pred) - u64::min(y, pred);
+        let err = error_between(pred, y);
 
         let cur_val = last_layer_max_l1s[target];
         last_layer_max_l1s[target] = (cur_val.0 + 1, u64::max(err, cur_val.1));
+    }    
+
+    // for lower bound searches, we need to make sure that:
+    //   (1) a query for the first key in the next leaf minus one 
+    //       includes the key in the next leaf. (upper error)
+    //   (2) a query for the last key in the previous leaf plus one
+    //       includes the first key after the previous leaf (lower error)
+    //       (normally, the first key after the previous leaf is the first
+    //        key in this leaf, but not in the case where this leaf has no keys)
+    let mut large_corrections = 0;
+    for leaf_idx in 0..num_leaf_models as usize {
+        let curr_err = last_layer_max_l1s[leaf_idx].1;
+        let upper_error = {
+            let (idx_of_next, key_of_next) = find_first_above(
+                &first_key_for_leaf, leaf_idx
+            ).unwrap_or((md_container.len() as u64, std::u64::MAX));
+            
+            let pred = leaf_models[leaf_idx].predict_to_int((key_of_next - 1).into());
+            error_between(pred, idx_of_next + 1)
+        };
+        
+        let lower_error = {
+            let (first_idx_above_previous_leaf, _) = find_first_above(
+                &first_key_for_leaf, if leaf_idx == 0 { 0 } else { leaf_idx - 1 }
+            ).unwrap_or((md_container.len() as u64, std::u64::MAX));
+            
+            let (_idx_of_prev, key_of_prev) = find_first_below(
+                &last_key_for_leaf, leaf_idx
+            ).unwrap_or((0, 0));
+
+            let pred = leaf_models[leaf_idx].predict_to_int((key_of_prev + 1).into());
+            error_between(pred, first_idx_above_previous_leaf)
+        };
+          
+            
+        let new_err = *(&[curr_err, upper_error, lower_error]).iter().max().unwrap()
+            + max_run_length[leaf_idx];
+
+        let num_items_in_leaf = last_layer_max_l1s[leaf_idx].0;
+        last_layer_max_l1s[leaf_idx] = (num_items_in_leaf, new_err);
+
+        if new_err - curr_err > 512 && num_items_in_leaf > 100 {
+            large_corrections += 1;
+        }
+    }
+
+    if large_corrections > 1 {
+        warn!("Of {} models, {} needed large lower bound corrections.",
+              num_leaf_models, large_corrections);
     }
                         
     info!("Evaluating two-layer RMI...");
@@ -166,9 +297,9 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
         .iter().map(|(n, err)| (*n as f64)*((2*err + 2) as f64).log2()).sum::<f64>() / num_rows as f64;
 
     let model_max_log2_error: f64 = (model_max_error as f64).log2();
+    
     let final_errors = last_layer_max_l1s.into_iter()
         .map(|(_n, err)| err).collect();
-
     
     return TrainedRMI {
         model_avg_error,

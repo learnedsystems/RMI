@@ -37,6 +37,7 @@ pub use stdlib::StdFunctions;
 use std::collections::HashSet;
 use std::io::Write;
 use byteorder::{WriteBytesExt, LittleEndian};
+use superslice::*;
 
 #[derive(Clone)]
 pub struct ModelDataWrapper<'a> {
@@ -67,6 +68,11 @@ impl <'a> ModelDataWrapper<'a> {
 
     pub fn get_key(&self, idx: usize) -> u64 {
         return self.model_data.get_key(idx);
+    }
+    
+    #[allow(dead_code)]
+    pub fn lower_bound(&self, lookup: u64) -> usize {
+        return self.as_int_int().lower_bound_by(|(k, _)| k.cmp(&lookup));
     }
 
     pub fn iter_float_float(&self) -> ModelDataFFIterator {
@@ -542,6 +548,10 @@ pub trait Model: Sync + Send {
     }
     fn error_bound(&self) -> Option<u64> {
         return None;
+    }
+
+    fn set_to_constant_model(&mut self, _constant: u64) -> bool {
+        return false;
     }
 }
 

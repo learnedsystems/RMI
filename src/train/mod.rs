@@ -24,6 +24,22 @@ pub struct TrainedRMI {
     pub branching_factor: u64
 }
 
+impl TrainedRMI {
+    #[allow(dead_code)]
+    fn test_predict(&self, lookup_key: u64) -> (u64, u64) {
+        assert_eq!(self.rmi.len(), 2);
+        let top_model = &self.rmi[0][0];
+        let leaf_models = &self.rmi[1];
+        let num_leaf_models = leaf_models.len() as u64;
+        
+        let leaf_idx = top_model.predict_to_int(lookup_key.into());
+        let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
+        println!("Target leaf: {}", target);
+        let pred = leaf_models[target].predict_to_int(lookup_key.into());
+        return (pred, self.last_layer_max_l1s[target]);
+    }
+}
+
 fn train_model(model_type: &str, data: &ModelDataWrapper) -> Box<dyn Model> {
     let model: Box<dyn Model> = match model_type {
         "linear" => Box::new(LinearModel::new(data)),
@@ -78,6 +94,19 @@ fn validate(model_spec: &[String]) {
     }
 }
 
+/*fn test_rmi_input(test_key: u64, data: &ModelDataWrapper, rmi: &TrainedRMI) {
+    let correct = data.lower_bound(test_key);
+    println!("Predicting {}", test_key);
+    let (guess, err) = rmi.test_predict(test_key);
+    println!("Model prediction for lookup {}: {} with error {}",
+             test_key, guess, err);
+    
+    println!("({}, {}), {}",
+             guess - err,
+             guess + err,
+             correct);
+}*/
+
 pub fn train(data: &mut ModelDataWrapper,
              model_spec: &str, branch_factor: u64) -> TrainedRMI {
     let (model_list, last_model): (Vec<String>, String) = {
@@ -88,8 +117,9 @@ pub fn train(data: &mut ModelDataWrapper,
     };
 
     if model_list.len() == 1 && data.len() > 1_000_000 {
-        return two_layer::train_two_layer(data, &model_list[0],
-                                          &last_model, branch_factor);
+        let res = two_layer::train_two_layer(data, &model_list[0],
+                                             &last_model, branch_factor);
+        return res;
     }
 
     // it is not a simple, two layer rmi

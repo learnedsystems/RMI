@@ -11,7 +11,7 @@ use crate::models::*;
 
 fn linear_splines(data: &ModelDataWrapper) -> (f64, f64) {
     if data.len() == 0 {
-        return (0.0, 1.0);
+        return (0.0, 0.0);
     }
 
     if data.len() == 1 {
@@ -72,6 +72,11 @@ inline double linear(double alpha, double beta, double inp) {
 
     fn function_name(&self) -> String {
         return String::from("linear");
+    }
+
+    fn set_to_constant_model(&mut self, constant: u64) -> bool {
+        self.params = (constant as f64, 0.0);
+        return true;
     }
 }
 

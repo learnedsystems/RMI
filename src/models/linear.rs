@@ -84,8 +84,8 @@ impl LinearModel {
 
 impl Model for LinearModel {
     fn predict_to_float(&self, inp: ModelInput) -> f64 {
-        let (alpha, beta) = self.params;
-        return beta.mul_add(inp.as_float(), alpha);
+        let (intercept, slope) = self.params;
+        return slope.mul_add(inp.as_float(), intercept);
     }
 
     fn input_type(&self) -> ModelDataType {
@@ -111,6 +111,12 @@ inline double linear(double alpha, double beta, double inp) {
     fn function_name(&self) -> String {
         return String::from("linear");
     }
+
+    fn set_to_constant_model(&mut self, constant: u64) -> bool {
+        self.params = (constant as f64, 0.0);
+        return true;
+    }
+            
 }
 
 #[cfg(test)]
@@ -279,5 +285,10 @@ inline double linear(double alpha, double beta, double inp) {
     
     fn function_name(&self) -> String {
         return String::from("linear");
+    }
+
+    fn set_to_constant_model(&mut self, constant: u64) -> bool {
+        self.params = (constant as f64, 0.0);
+        return true;
     }
 }
