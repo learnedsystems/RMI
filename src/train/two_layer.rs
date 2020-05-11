@@ -190,12 +190,10 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
         last_key_for_leaf[target] = Some((y, x));
     }
 
-    /*let mut next_index_for_leaf: Vec<u64> = vec![0 ; num_leaf_models as usize];
+    /*let mut next_for_leaf: Vec<u64> = vec![(0, 0) ; num_leaf_models as usize];
     for idx in 0..num_leaf_models {
-        
+        let (leaf_idx, val) = find_first_above(
     }*/
-
-
     
     // replace any empty model with a model that returns the correct constant
     // (for UB predictions), if the underlying model supports it.
@@ -206,7 +204,7 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
 
         if last_key_for_leaf[idx].is_none() {
             // model is empty!
-            let upper_bound = find_first_above(&last_key_for_leaf, idx)
+            let upper_bound = find_first_above(&first_key_for_leaf, idx)
                 .map(|v| v.1)
                 .map(|(correct_idx, _key)| correct_idx)
                 .unwrap_or(md_container.len() as u64);
