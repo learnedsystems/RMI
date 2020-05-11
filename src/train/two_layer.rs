@@ -14,26 +14,26 @@ fn error_between(v1: u64, v2: u64) -> u64 {
     return u64::max(v1, v2) - u64::min(v1, v2);
 }
 
-fn find_first_below<T>(data: &[Option<T>], idx: usize) -> &Option<T> {
+fn find_first_below<T: Copy>(data: &[Option<T>], idx: usize) -> Option<(usize, T)> {
     assert!(idx < data.len());
-    if idx == 0 { return &None; }
+    if idx == 0 { return None; }
     
     let mut i = idx - 1;
     loop {
-        if data[i].is_some() { return &data[i]; }
-        if i == 0 { return &None; }
+        if let Some(v) = data[i] { return Some((i, v)); }
+        if i == 0 { return None; }
         i -= 1;
     }
 }
 
-fn find_first_above<T>(data: &[Option<T>], idx: usize) -> &Option<T> {
+fn find_first_above<T: Copy>(data: &[Option<T>], idx: usize) -> Option<(usize, T)> {
     assert!(idx < data.len());
-    if idx == data.len() - 1 { return &None; }
+    if idx == data.len() - 1 { return None; }
         
     let mut i = idx + 1;
     loop {
-        if data[i].is_some() { return &data[i]; }
-        if i == data.len() - 1 { return &None; }
+        if let Some(v) = data[i] { return Some((i, v)); }
+        if i == data.len() - 1 { return None; }
         i += 1;
     }
 }
@@ -183,13 +183,18 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
             current_run_key = x;
             last_target = target;
         }
-        
-        
+                
         if first_key_for_leaf[target].is_none() {
             first_key_for_leaf[target] = Some((y, x));
         }
         last_key_for_leaf[target] = Some((y, x));
     }
+
+    /*let mut next_index_for_leaf: Vec<u64> = vec![0 ; num_leaf_models as usize];
+    for idx in 0..num_leaf_models {
+        
+    }*/
+
 
     
     // replace any empty model with a model that returns the correct constant
@@ -202,6 +207,7 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
         if last_key_for_leaf[idx].is_none() {
             // model is empty!
             let upper_bound = find_first_above(&last_key_for_leaf, idx)
+                .map(|v| v.1)
                 .map(|(correct_idx, _key)| correct_idx)
                 .unwrap_or(md_container.len() as u64);
             if !leaf_models[idx].set_to_constant_model(upper_bound) {
@@ -241,8 +247,9 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
         let curr_err = last_layer_max_l1s[leaf_idx].1;
         let upper_error = {
             let (idx_of_next, key_of_next) = find_first_above(
-                &first_key_for_leaf, leaf_idx
-            ).unwrap_or((md_container.len() as u64, std::u64::MAX));
+                &first_key_for_leaf, leaf_idx)
+                .map(|v| v.1)
+                .unwrap_or((md_container.len() as u64, std::u64::MAX));
             
             let pred = leaf_models[leaf_idx].predict_to_int((key_of_next - 1).into());
             error_between(pred, idx_of_next + 1)
@@ -250,12 +257,14 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
         
         let lower_error = {
             let (first_idx_above_previous_leaf, _) = find_first_above(
-                &first_key_for_leaf, if leaf_idx == 0 { 0 } else { leaf_idx - 1 }
-            ).unwrap_or((md_container.len() as u64, std::u64::MAX));
+                &first_key_for_leaf, if leaf_idx == 0 { 0 } else { leaf_idx - 1 })
+                .map(|v| v.1)
+                .unwrap_or((md_container.len() as u64, std::u64::MAX));
             
             let (_idx_of_prev, key_of_prev) = find_first_below(
-                &last_key_for_leaf, leaf_idx
-            ).unwrap_or((0, 0));
+                &last_key_for_leaf, leaf_idx)
+                .map(|v| v.1)
+                .unwrap_or((0, 0));
 
             let pred = leaf_models[leaf_idx].predict_to_int((key_of_prev + 1).into());
             error_between(pred, first_idx_above_previous_leaf)
