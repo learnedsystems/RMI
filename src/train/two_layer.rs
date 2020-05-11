@@ -46,6 +46,12 @@ fn build_models_from(data: &ModelDataWrapper,
         if target > last_target {
             // this is the first datapoint for the next leaf model.
             // train the previous leaf model.
+            
+            // include the first point of the next leaf node to
+            // support lower bound searches (not required, but reduces error)
+            let last_item = second_layer_data.last().copied();
+            second_layer_data.push((x, y));
+            
             let md = ModelData::IntKeyToIntPos(second_layer_data);
             let container = ModelDataWrapper::new(&md);
             let leaf_model = train_model(model_type, &container);
@@ -57,8 +63,15 @@ fn build_models_from(data: &ModelDataWrapper,
                 leaf_models.push(train_model(model_type, &dummy_md));
             }
             assert_eq!(leaf_models.len() + first_model_idx, target);
-            
+
             second_layer_data = Vec::new();
+
+            // include the last item of this leaf in the next leaf
+            // to support lower bound searches.
+            if let Some(v) = last_item {
+                second_layer_data.push(v);
+            }
+
         }
         
         second_layer_data.push((x, y));
