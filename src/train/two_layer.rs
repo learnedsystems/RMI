@@ -215,7 +215,7 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
     }
 
     if large_corrections > 1 {
-        warn!("Of {} models, {} needed large lower bound corrections.",
+        info!("Of {} models, {} needed large lower bound corrections.",
               num_leaf_models, large_corrections);
     }
                         
