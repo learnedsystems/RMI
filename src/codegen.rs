@@ -707,9 +707,14 @@ pub fn output_rmi(namespace: &str,
     };
 
     let conf = match data_dir {
-        None => StorageConf::Embed,
+        None => {
+            assert!(!last_layer_errors,
+                    "Cannot directly embed RMI data and track last level errors.");
+            StorageConf::Embed
+        },
         Some(s) => StorageConf::Disk(String::from(s))
     };
+
     
     return generate_code(
         &mut bw1,
