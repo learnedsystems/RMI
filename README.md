@@ -59,7 +59,7 @@ namespace wiki {
 If you run the compiler without the `-e` flag, the API will change to no longer report the maximum possible error of each lookup, saving some space.
 
 ```c++
-uint64_t lookup(uint64_t key, size_t* err);
+uint64_t lookup(uint64_t key);
 ```
 
 
