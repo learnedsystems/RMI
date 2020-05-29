@@ -14,6 +14,7 @@ macro_rules! scale {
     };
 }
 
+#[allow(clippy::float_cmp)]
 fn cubic(data: &ModelDataWrapper) -> (f64, f64, f64, f64) {
     if data.len() == 0 {
         return (0.0, 0.0, 1.0, 0.0);

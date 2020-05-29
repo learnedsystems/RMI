@@ -60,7 +60,7 @@ fn narrow_front(results: &[RMIStatistics], desired_size: usize) -> Vec<RMIStatis
         if err1 > err2 {
             tmp.remove(smallest_gap.0);
         } else {
-            tmp.remove(smallest_gap.0);
+            tmp.remove(smallest_gap.1);
         }
     }
     tmp.insert(0, best_mod);
@@ -142,7 +142,8 @@ impl RMIStatistics {
             return false;
         }
 
-        if self.size <= other.size && self.average_log2_error == other.average_log2_error {
+        let log2_diff = (self.average_log2_error - other.average_log2_error).abs();
+        if self.size <= other.size && log2_diff < std::f64::EPSILON {
             return false;
         }
 

@@ -103,7 +103,6 @@ pub fn radix_index(points: &[u64], num_bits: u8) -> Vec<u64> {
     return radix_index;
 }
 
-
 macro_rules! plr_with {
     ($plr: ty, $delta: ident, $data: ident) => {{
         let mut plr = <$plr>::new($delta);
@@ -111,7 +110,7 @@ macro_rules! plr_with {
 
         let mut last_x = -1.0;
         for (x, y) in $data.iter_float_float() {
-            if x == last_x {
+            if (x - last_x).abs() < std::f64::EPSILON {
                 continue;
             } else {
                 last_x = x;
