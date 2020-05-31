@@ -12,7 +12,7 @@ use crate::models::utils::{plr, radix_index};
 const NUM_RADIX_BITS: u8 = 20;
 
 
-fn bottom_up_plr(data: &ModelDataWrapper) -> (Vec<u64>, Vec<f64>) {
+fn bottom_up_plr(data: &RMITrainingData) -> (Vec<u64>, Vec<f64>) {
     if data.len() == 0 {
         return (Vec::new(), Vec::new());
     }
@@ -27,7 +27,7 @@ fn bottom_up_plr(data: &ModelDataWrapper) -> (Vec<u64>, Vec<f64>) {
         coeffs = c;
     }
     
-    assert!(points[0] <= data.iter_int_int().next().unwrap().0);
+    assert!(points[0] <= data.get_uint(0).0);
     
     return (points, coeffs);
 }
@@ -40,7 +40,7 @@ pub struct BottomUpPLR {
 }
 
 impl BottomUpPLR {
-    pub fn new(data: &ModelDataWrapper) -> BottomUpPLR {
+    pub fn new(data: &RMITrainingData) -> BottomUpPLR {
         let (points, coeffs) = bottom_up_plr(data);
         let radix = radix_index(&points, NUM_RADIX_BITS);
         return BottomUpPLR {

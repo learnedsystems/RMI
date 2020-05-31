@@ -32,7 +32,7 @@ fn equidepth_histogram(data: &ModelData) -> Vec<u64> {
 }
 */
 
-fn linear_norm_histogram(data: &ModelDataWrapper) -> Vec<u64> {
+fn linear_norm_histogram(data: &RMITrainingData) -> Vec<u64> {
     assert!(data.len() > 0);
     
     let num_bins = data.get(data.len()-1).1 as usize;
@@ -49,7 +49,7 @@ pub struct EquidepthHistogramModel {
 }
 
 impl EquidepthHistogramModel {
-    pub fn new(data: &ModelDataWrapper) -> EquidepthHistogramModel {
+    pub fn new(data: &RMITrainingData) -> EquidepthHistogramModel {
         if data.len() == 0 {
             return EquidepthHistogramModel { params: Vec::new(), radix: Vec::new() };
         }

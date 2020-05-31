@@ -7,7 +7,7 @@
  
  
 
-use crate::models::ModelData;
+use crate::models::RMITrainingData;
 use byteorder::{LittleEndian, ReadBytesExt};
 use log::debug;
 use log::*;
@@ -19,7 +19,9 @@ pub enum DataType {
     UINT32,
 }
 
-pub fn load_data(filepath: &str, dt: DataType, downsample: usize) -> (usize, ModelData) {
+pub fn load_data(filepath: &str,
+                 dt: DataType,
+                 downsample: usize) -> (usize, RMITrainingData) {
     let fd = File::open(filepath).unwrap_or_else(|_| {
         panic!("Unable to open data file at {}", filepath)
     });
@@ -42,10 +44,10 @@ pub fn load_data(filepath: &str, dt: DataType, downsample: usize) -> (usize, Mod
     };
 
     let has_duplicates = has_duplicates(&keys);
-    let mut init_data: Vec<(u64, u64)> = Vec::with_capacity(keys.len());
+    let mut init_data: Vec<(u64, usize)> = Vec::with_capacity(keys.len());
 
     for (idx, k) in keys.into_iter().enumerate() {
-        init_data.push((k, idx as u64));
+        init_data.push((k, idx));
     }
 
     if has_duplicates {
@@ -62,7 +64,7 @@ pub fn load_data(filepath: &str, dt: DataType, downsample: usize) -> (usize, Mod
         info!("Downsampled from {} to {}", orig_size, init_data.len());
     }
 
-    return (orig_size, ModelData::IntKeyToIntPos(init_data));
+    return (orig_size, RMITrainingData::new(Box::new(init_data)));
 }
 
 fn has_duplicates<T: PartialEq>(data: &[T]) -> bool {
@@ -81,7 +83,7 @@ fn has_duplicates<T: PartialEq>(data: &[T]) -> bool {
     return false;
 }
 
-fn resolve_dup_keys(data: &mut [(u64, u64)]) {
+fn resolve_dup_keys(data: &mut [(u64, usize)]) {
     if data.len() <= 1 {
         return;
     }

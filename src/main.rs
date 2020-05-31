@@ -16,7 +16,6 @@ mod train;
 mod optimizer;
 
 use load::{load_data, DataType};
-use models::ModelDataWrapper;
 use train::train;
 
 use json::*;
@@ -119,7 +118,7 @@ fn main() {
     
     info!("Reading {}...", fp);
 
-    let (num_rows, data) = if fp.contains("uint64") {
+    let (num_rows, mut data) = if fp.contains("uint64") {
         load_data(&fp, DataType::UINT64, downsample)
     } else {
         load_data(&fp, DataType::UINT32, downsample)
@@ -172,7 +171,7 @@ fn main() {
                     Some(b) => b,
                     None => false
                 };
-                
+
                 to_test.push((layers, branching, namespace, bsearch));
             }
 
@@ -183,14 +182,13 @@ fn main() {
                           .template("{pos} / {len} ({msg}) {wide_bar} {eta}"));
 
             let train_func =
-                |(models, branch_factor,
-                  namespace, bsearch): &(String, u64, Option<String>, bool)| {
+                |(models, branch_factor, namespace, bsearch): &(String, u64, Option<String>, bool)| {
                     trace!("Training RMI {} with branching factor {}",
                            models, *branch_factor);
-                    let mut md_container = ModelDataWrapper::new(&data);
                     
                     let start_time = SystemTime::now();
-                    let trained_model = train(&mut md_container, models, *branch_factor);
+                    let mut loc_data = data.soft_copy();
+                    let trained_model = train(&mut loc_data, models, *branch_factor);
                     let build_time = SystemTime::now()
                         .duration_since(start_time)
                         .map(|d| d.as_nanos())
@@ -263,10 +261,9 @@ fn main() {
             .parse::<u64>()
             .unwrap();
         let last_layer_errors = matches.is_present("last-layer-errors");
-        let mut md_container = ModelDataWrapper::new(&data);
 
         let start_time = SystemTime::now();
-        let trained_model = train(&mut md_container, models, branch_factor);
+        let trained_model = train(&mut data, models, branch_factor);
         let build_time = SystemTime::now()
             .duration_since(start_time)
             .map(|d| d.as_nanos())

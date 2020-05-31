@@ -9,13 +9,12 @@ use crate::models::*;
 use crate::train::{validate, train_model, TrainedRMI};
 use crate::train::lower_bound_correction::LowerBoundCorrection;
 use log::*;
-use superslice::*;
 
 fn error_between(v1: u64, v2: u64) -> u64 {
     return u64::max(v1, v2) - u64::min(v1, v2);
 }
 
-fn build_models_from(data: &ModelDataWrapper,
+fn build_models_from(data: &RMITrainingData,
                      top_model: &Box<dyn Model>,
                      model_type: &str,
                      start_idx: usize, end_idx: usize,
@@ -26,14 +25,14 @@ fn build_models_from(data: &ModelDataWrapper,
     assert!(end_idx <= data.len());
     assert!(start_idx <= data.len());
 
-    let empty_data = ModelData::empty();
-    let dummy_md = ModelDataWrapper::new(&empty_data);
+    let dummy_md = RMITrainingData::empty();
     let mut leaf_models: Vec<Box<dyn Model>> = Vec::with_capacity(num_models as usize);
     let mut second_layer_data = Vec::with_capacity((end_idx - start_idx) / num_models as usize);
     let mut last_target = first_model_idx;
 
-    let mut bounded_it = data.iter_int_int();
-    bounded_it.bound(start_idx, end_idx);
+    let bounded_it = data.iter_uint_usize()
+        .skip(start_idx)
+        .take((data.len() - start_idx) - end_idx);
         
     for (x, y) in bounded_it {
         let model_pred = top_model.predict_to_int(x.into()) as usize;
@@ -52,8 +51,7 @@ fn build_models_from(data: &ModelDataWrapper,
             let last_item = second_layer_data.last().copied();
             second_layer_data.push((x, y));
             
-            let md = ModelData::IntKeyToIntPos(second_layer_data);
-            let container = ModelDataWrapper::new(&md);
+            let container = RMITrainingData::from_vec(second_layer_data);
             let leaf_model = train_model(model_type, &container);
             leaf_models.push(leaf_model);
             
@@ -80,8 +78,7 @@ fn build_models_from(data: &ModelDataWrapper,
 
     // train the last remaining model
     assert!(! second_layer_data.is_empty());
-    let md = ModelData::IntKeyToIntPos(second_layer_data);
-    let container = ModelDataWrapper::new(&md);
+    let container = RMITrainingData::from_vec(second_layer_data);
     let leaf_model = train_model(model_type, &container);
     leaf_models.push(leaf_model);
     assert!(leaf_models.len() <= num_models);
@@ -94,7 +91,7 @@ fn build_models_from(data: &ModelDataWrapper,
     return leaf_models;
 }
 
-pub fn train_two_layer(md_container: &mut ModelDataWrapper,
+pub fn train_two_layer(md_container: &mut RMITrainingData,
                        layer1_model: &str, layer2_model: &str,
                        num_leaf_models: u64) -> TrainedRMI {
     validate(&[String::from(layer1_model), String::from(layer2_model)]);
@@ -110,7 +107,7 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
 
     // find a prediction boundary near the middle
     let midpoint_model = num_leaf_models / 2;
-    let split_idx = md_container.as_int_int().lower_bound_by(|x| {
+    let split_idx = md_container.lower_bound_by(|x| {
         let model_idx = top_model.predict_to_int(x.0.into());
         let model_target = u64::min(num_leaf_models - 1, model_idx);
         return model_target.cmp(&midpoint_model);
@@ -178,7 +175,7 @@ pub fn train_two_layer(md_container: &mut ModelDataWrapper,
     info!("Computing last level errors...");
     // evaluate model, compute last level errors
     let mut last_layer_max_l1s = vec![(0, 0) ; num_leaf_models as usize];
-    for &(x, y) in md_container.as_int_int() {
+    for (x, y) in md_container.iter_uint_uint() {
         let leaf_idx = top_model.predict_to_int(x.into());
         let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
         

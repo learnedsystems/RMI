@@ -15,12 +15,12 @@ pub struct RadixModel {
 }
 
 impl RadixModel {
-    pub fn new(data: &ModelDataWrapper) -> RadixModel {
+    pub fn new(data: &RMITrainingData) -> RadixModel {
         if data.len() == 0 {
             return RadixModel { params: (0, 0) };
         }
 
-        let largest_value = data.iter_int_int().map(|(_x, y)| y).max().unwrap();
+        let largest_value = data.iter_uint_uint().map(|(_x, y)| y).max().unwrap();
         let bits = num_bits(largest_value);
         trace!(
             "Radix layer using {} bits, from largest value {} (max layers: {})",
@@ -87,12 +87,12 @@ pub struct RadixTable {
 }
 
 impl RadixTable {
-    pub fn new(data: &ModelDataWrapper, bits: u8) -> RadixTable {
+    pub fn new(data: &RMITrainingData, bits: u8) -> RadixTable {
         let prefix = common_prefix_size(data);
         let mut hint_table: Vec<u32> = vec![0 ; 1 << bits];
 
         let mut last_radix = 0;
-        for (x, y) in data.iter_int_int() {
+        for (x, y) in data.iter_uint_uint() {
             let current_radix = ((x << prefix) >> prefix) >> (64 - (prefix + bits));
             if current_radix == last_radix { continue; }
             assert!(current_radix < hint_table.len() as u64);

@@ -181,18 +181,20 @@ impl RMIStatistics {
     }
 }
 
-fn measure_rmis(data: &ModelData, configs: &[(String, u64)]) -> Vec<RMIStatistics> {
+fn measure_rmis(data: &RMITrainingData,
+                configs: &[(String, u64)]) -> Vec<RMIStatistics> {
     let pbar = ProgressBar::new(configs.len() as u64);
-    configs.par_iter()
+    
+   configs.par_iter()
         .map(|(models, branch_factor)| {
-            let mut md = ModelDataWrapper::new(data);
-            let res = train::train(&mut md, models, *branch_factor);
+            let mut loc_data = data.soft_copy();
+            let res = train::train(&mut loc_data, models, *branch_factor);
             pbar.inc(1);
             RMIStatistics::from_trained(&res)
         }).collect()
 }
 
-pub fn find_pareto_efficient_configs(data: &ModelData, restrict: usize)
+pub fn find_pareto_efficient_configs(data: &RMITrainingData, restrict: usize)
                                      -> Vec<RMIStatistics>{
     let initial_configs  = first_phase_configs();
     let first_phase_results = measure_rmis(data, &initial_configs);

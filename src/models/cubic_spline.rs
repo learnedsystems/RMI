@@ -15,7 +15,7 @@ macro_rules! scale {
 }
 
 #[allow(clippy::float_cmp)]
-fn cubic(data: &ModelDataWrapper) -> (f64, f64, f64, f64) {
+fn cubic(data: &RMITrainingData) -> (f64, f64, f64, f64) {
     if data.len() == 0 {
         return (0.0, 0.0, 1.0, 0.0);
     }
@@ -103,7 +103,7 @@ pub struct CubicSplineModel {
 }
 
 impl CubicSplineModel {
-    pub fn new(data: &ModelDataWrapper) -> CubicSplineModel {
+    pub fn new(data: &RMITrainingData) -> CubicSplineModel {
         let cubic = CubicSplineModel {
             params: cubic(data),
         };

@@ -10,7 +10,7 @@
 use crate::models::*;
 
 #[allow(clippy::float_cmp)]
-fn linear_splines(data: &ModelDataWrapper) -> (f64, f64) {
+fn linear_splines(data: &RMITrainingData) -> (f64, f64) {
     if data.len() == 0 {
         return (0.0, 0.0);
     }
@@ -38,7 +38,7 @@ pub struct LinearSplineModel {
 }
 
 impl LinearSplineModel {
-    pub fn new(data: &ModelDataWrapper) -> LinearSplineModel {
+    pub fn new(data: &RMITrainingData) -> LinearSplineModel {
         return LinearSplineModel {
             params: linear_splines(data),
         };

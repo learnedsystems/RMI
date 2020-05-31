@@ -9,7 +9,7 @@
 use crate::models::*;
 
 mod two_layer;
-mod multi_layer;
+//mod multi_layer;
 mod lower_bound_correction;
 
 pub struct TrainedRMI {
@@ -41,7 +41,7 @@ impl TrainedRMI {
     }
 }
 
-fn train_model(model_type: &str, data: &ModelDataWrapper) -> Box<dyn Model> {
+fn train_model(model_type: &str, data: &RMITrainingData) -> Box<dyn Model> {
     let model: Box<dyn Model> = match model_type {
         "linear" => Box::new(LinearModel::new(data)),
         "robust_linear" => Box::new(RobustLinearModel::new(data)),
@@ -68,8 +68,7 @@ fn train_model(model_type: &str, data: &ModelDataWrapper) -> Box<dyn Model> {
 
 fn validate(model_spec: &[String]) {
     let num_layers = model_spec.len();
-    let empty_data = ModelData::empty();
-    let empty_container = ModelDataWrapper::new(&empty_data);
+    let empty_container = RMITrainingData::empty();
 
     for (idx, model) in model_spec.iter().enumerate() {
         let restriction = train_model(model, &empty_container).restriction();
@@ -95,7 +94,7 @@ fn validate(model_spec: &[String]) {
     }
 }
 
-/*fn test_rmi_input(test_key: u64, data: &ModelDataWrapper, rmi: &TrainedRMI) {
+/*fn test_rmi_input(test_key: u64, data: &RMITrainingData, rmi: &TrainedRMI) {
     let correct = data.lower_bound(test_key);
     println!("Predicting {}", test_key);
     let (guess, err) = rmi.test_predict(test_key);
@@ -108,8 +107,9 @@ fn validate(model_spec: &[String]) {
              correct);
 }*/
 
-pub fn train(data: &mut ModelDataWrapper,
+pub fn train(data: &mut RMITrainingData,
              model_spec: &str, branch_factor: u64) -> TrainedRMI {
+    
     let (model_list, last_model): (Vec<String>, String) = {
         let mut all_models: Vec<String> = model_spec.split(',').map(String::from).collect();
         validate(&all_models);
@@ -124,5 +124,6 @@ pub fn train(data: &mut ModelDataWrapper,
     }
 
     // it is not a simple, two layer rmi
-    return multi_layer::train_multi_layer(data, &model_list, last_model, branch_factor);
+    //return multi_layer::train_multi_layer(data, &model_list, last_model, branch_factor);
+    panic!(); // TODO
 }

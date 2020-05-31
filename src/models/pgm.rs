@@ -17,7 +17,7 @@ const SMALLEST_LAYER_SIZE: usize = 32;
 
 const SEARCH_ERR_MARGIN: usize = (2.0 * OTHER_LAYER_DELTA) as usize;
 
-fn pgm(data: &ModelDataWrapper) -> (Vec<Vec<u64>>, Vec<Vec<f64>>) {
+fn pgm(data: &RMITrainingData) -> (Vec<Vec<u64>>, Vec<Vec<f64>>) {
     if data.len() == 0 {
         return (Vec::new(), Vec::new());
     }
@@ -36,11 +36,10 @@ fn pgm(data: &ModelDataWrapper) -> (Vec<Vec<u64>>, Vec<Vec<f64>>) {
         let mut d = Vec::new();
 
         for (idx, &itm) in pts.last().unwrap().iter().enumerate() {
-            d.push((itm, idx as u64));
+            d.push((itm, idx));
         }
 
-        let md = ModelData::IntKeyToIntPos(d);
-        let md_container = ModelDataWrapper::new(&md);
+        let md_container = RMITrainingData::new(Box::new(d));
 
         let (p, c) = plr(&md_container, OTHER_LAYER_DELTA, true);
         pts.push(p);
@@ -62,7 +61,7 @@ pub struct PGM {
 }
 
 impl PGM {
-    pub fn new(data: &ModelDataWrapper) -> PGM {
+    pub fn new(data: &RMITrainingData) -> PGM {
         let (points, coeffs) = pgm(data);
         return PGM { points, coeffs };
     }

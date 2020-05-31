@@ -9,7 +9,7 @@ use crate::models::*;
 use crate::train::{train_model, TrainedRMI};
 use log::*;
 
-pub fn train_multi_layer(data: &mut ModelDataWrapper,
+pub fn train_multi_layer(data: &mut RMITrainingData,
                          model_list: &[String],
                          last_model: String,
                          branch_factor: u64) -> TrainedRMI {
@@ -29,7 +29,7 @@ pub fn train_multi_layer(data: &mut ModelDataWrapper,
         let mut models: Vec<Box<dyn Model>> = Vec::with_capacity(next_layer_size as usize);
 
         for model_data in data_partitions.into_iter() {
-            let mut md_container = ModelDataWrapper::new(&model_data);
+            let mut md_container = RMITrainingData::new(&model_data);
 
             // not at the last layer -- rescale
             md_container.set_scale(next_layer_size as f64 / num_rows as f64);
@@ -69,7 +69,7 @@ pub fn train_multi_layer(data: &mut ModelDataWrapper,
 
     let mut n = 1;
     for (midx, model_data) in data_partitions.into_iter().enumerate() {
-        let md_container = ModelDataWrapper::new(&model_data);
+        let md_container = RMITrainingData::new(&model_data);
         let last_model = train_model(last_model.as_str(), &md_container);
         let mut max_error = 0;
         

@@ -58,7 +58,7 @@ fn slr<T: Iterator<Item = (f64, f64)>>(loc_data: T) -> (f64, f64) {
     return (alpha, beta);
 }
 
-fn loglinear_slr(data: &ModelDataWrapper) -> (f64, f64) {
+fn loglinear_slr(data: &RMITrainingData) -> (f64, f64) {
     // log all of the outputs, omit any item that doesn't have a valid log
     let transformed_data: Vec<(f64, f64)> = data
         .iter_float_float()
@@ -68,8 +68,7 @@ fn loglinear_slr(data: &ModelDataWrapper) -> (f64, f64) {
 
     // TODO this currently creates a copy of the data and then calls
     // slr... we can probably do better by moving the log into the slr.
-    let new_data = ModelData::FloatKeyToFloatPos(transformed_data);
-    return slr(new_data.iter_float_float());
+    return slr(transformed_data.into_iter());
 }
 
 pub struct LinearModel {
@@ -77,7 +76,7 @@ pub struct LinearModel {
 }
 
 impl LinearModel {
-    pub fn new(data: &ModelDataWrapper) -> LinearModel {
+    pub fn new(data: &RMITrainingData) -> LinearModel {
         return LinearModel { params: slr(data.iter_float_float()) };
     }
 }
@@ -166,7 +165,7 @@ fn exp1(inp: f64) -> f64 {
 }
 
 impl LogLinearModel {
-    pub fn new(data: &ModelDataWrapper) -> LogLinearModel {
+    pub fn new(data: &RMITrainingData) -> LogLinearModel {
         return LogLinearModel {
             params: loglinear_slr(&data),
         };
@@ -236,7 +235,7 @@ pub struct RobustLinearModel {
 
 
 impl RobustLinearModel {
-    pub fn new(data: &ModelDataWrapper) -> RobustLinearModel {
+    pub fn new(data: &RMITrainingData) -> RobustLinearModel {
         let total_items = data.len();
         if data.len() == 0 {
             return RobustLinearModel {
@@ -247,8 +246,10 @@ impl RobustLinearModel {
         let bnd = usize::max(1, ((total_items as f64) * 0.0001) as usize);
         assert!(bnd*2+1 < data.len());
         
-        let mut iter = data.iter_float_float();
-        iter.bound(bnd, data.len() - bnd);
+        let iter = data.iter_float_float()
+            .skip(bnd)
+            .take(data.len() - 2*bnd);
+
         let robust_params = slr(iter);
         
         return RobustLinearModel {

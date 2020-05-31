@@ -17,12 +17,12 @@ pub struct BalancedRadixModel {
     high: bool,
 }
 
-fn chi2(data: &ModelDataWrapper, max_bin: u64, model: &BalancedRadixModel) -> f64 {
+fn chi2(data: &RMITrainingData, max_bin: u64, model: &BalancedRadixModel) -> f64 {
     // compute the x^2 value of the distribution
     // induced by this model.
     let mut counts = vec![0; max_bin as usize];
 
-    for (x, _y) in data.iter_int_int() {
+    for (x, _y) in data.iter_uint_uint() {
         counts[model.predict_to_int(x.into()) as usize] += 1;
     }
 
@@ -34,7 +34,7 @@ fn chi2(data: &ModelDataWrapper, max_bin: u64, model: &BalancedRadixModel) -> f6
         .sum();
 }
 
-fn bradix(data: &ModelDataWrapper, max_output: u64) -> BalancedRadixModel {
+fn bradix(data: &RMITrainingData, max_output: u64) -> BalancedRadixModel {
     let bits = num_bits(max_output);
     let common_prefix = common_prefix_size(data);
     trace!("Bradix layer common prefix: {}", common_prefix);
@@ -83,7 +83,7 @@ fn bradix(data: &ModelDataWrapper, max_output: u64) -> BalancedRadixModel {
 }
 
 impl BalancedRadixModel {
-    pub fn new(data: &ModelDataWrapper) -> BalancedRadixModel {
+    pub fn new(data: &RMITrainingData) -> BalancedRadixModel {
         if data.len() == 0 {
             return BalancedRadixModel {
                 params: (0, 0, 0),
@@ -91,7 +91,7 @@ impl BalancedRadixModel {
             };
         }
 
-        let largest_value = data.iter_int_int().map(|(_x, y)| y).max().unwrap();
+        let largest_value = data.iter_uint_uint().map(|(_x, y)| y).max().unwrap();
 
         return bradix(data, largest_value);
     }

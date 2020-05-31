@@ -22,11 +22,11 @@ pub fn num_bits(largest_target: u64) -> u8 {
     return nbits;
 }
 
-pub fn common_prefix_size(data: &ModelDataWrapper) -> u8 {
+pub fn common_prefix_size(data: &RMITrainingData) -> u8 {
     let mut any_ones: u64 = 0;
     let mut no_ones: u64 = !0;
 
-    for (x, _y) in data.iter_int_int() {
+    for (x, _y) in data.iter_uint_uint() {
         any_ones |= x;
         no_ones &= x;
     }
@@ -133,7 +133,7 @@ macro_rules! plr_with {
     }}
 }
 
-pub fn plr(data: &ModelDataWrapper, delta: f64, optimal: bool) -> (Vec<u64>, Vec<f64>) {
+pub fn plr(data: &RMITrainingData, delta: f64, optimal: bool) -> (Vec<u64>, Vec<f64>) {
     let segments = if optimal {
         plr_with!(OptimalPLR, delta, data)
     } else {
@@ -144,7 +144,7 @@ pub fn plr(data: &ModelDataWrapper, delta: f64, optimal: bool) -> (Vec<u64>, Vec
         .map(|seg| seg.start as u64)
         .collect();
 
-    points[0] = u64::min(points[0], data.iter_int_int().next().unwrap().0);
+    points[0] = u64::min(points[0], data.iter_uint_uint().next().unwrap().0);
     
     let coeffs = segments.iter()
         .flat_map(|seg| vec![seg.slope, seg.intercept])

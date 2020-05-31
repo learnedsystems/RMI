@@ -34,222 +34,134 @@ pub use radix::RadixModel;
 pub use radix::RadixTable;
 pub use stdlib::StdFunctions;
 
+use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::io::Write;
 use byteorder::{WriteBytesExt, LittleEndian};
-use superslice::*;
 
-#[derive(Clone)]
-pub struct ModelDataWrapper<'a> {
-    model_data: &'a ModelData,
-    scaling_factor: f64
+
+pub trait RMITrainingDataIteratorProvider: Send + Sync {
+    fn len(&self) -> usize;
+    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (u64, usize)> + '_>;
 }
 
-impl <'a> ModelDataWrapper<'a> {
-    pub fn new(md: &'a ModelData) -> ModelDataWrapper<'a> {
-        return ModelDataWrapper {
-            model_data: md,
-            scaling_factor: 1.0
-        }
+impl RMITrainingDataIteratorProvider for Vec<(u64, usize)> {
+    fn len(&self) -> usize {
+        return Vec::len(&self);
     }
+
+    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (u64, usize)> + '_> {
+        return Box::new(self.iter().cloned());
+    }
+}
+
+
+pub struct RMITrainingData {
+    iterable: Arc<Box<dyn RMITrainingDataIteratorProvider>>,
+    scale: f64
+}
+
+impl RMITrainingData {
+    pub fn new(iterable: Box<dyn RMITrainingDataIteratorProvider>) -> RMITrainingData {
+        return RMITrainingData { iterable: Arc::new(iterable), scale: 1.0 };
+    }
+
+    pub fn from_vec(data: Vec<(u64, usize)>) -> RMITrainingData {
+        return RMITrainingData::new(Box::new(data));
+    }
+
+    pub fn empty() -> RMITrainingData {
+        return RMITrainingData::from_vec(vec![]);
+    }
+
+    pub fn len(&self) -> usize { return self.iterable.len(); }
 
     pub fn set_scale(&mut self, scale: f64) {
-        self.scaling_factor = scale;
-    }
-
-    pub fn len(&self) -> usize {
-        return self.model_data.len();
+        self.scale = scale;
     }
 
     pub fn get(&self, idx: usize) -> (f64, f64) {
-        let (x, y) = self.model_data.get(idx);
-        return (x, y * self.scaling_factor);
+        return self.iter_float_float()
+            .skip(idx)
+            .next().unwrap();
     }
 
     pub fn get_key(&self, idx: usize) -> u64 {
-        return self.model_data.get_key(idx);
+        return self.iter_uint_usize()
+            .skip(idx)
+            .next().unwrap().0;
+    }
+
+
+    pub fn get_uint(&self, idx: usize) -> (u64, u64) {
+        return self.iter_uint_uint()
+            .skip(idx)
+            .next().unwrap();
+    }
+
+    pub fn get_uint_usize(&self, idx: usize) -> (u64, usize) {
+        return self.iter_uint_usize()
+            .skip(idx)
+            .next().unwrap();
+    }
+
+    pub fn iter_float_float(&self) -> impl Iterator<Item = (f64, f64)> + '_ {
+        let sf = self.scale;
+        return self.iterable.cdf_iter()
+            .map(move |(key, offset)| (key as f64, offset as f64 * sf));
+    }
+
+    pub fn iter_uint_usize(&self) -> impl Iterator<Item = (u64, usize)> + '_ {
+        let sf = self.scale;
+        return self.iterable.cdf_iter()
+            .map(move |(key, offset)| (key, (offset as f64 * sf) as usize));
+        
+    }
+
+    pub fn iter_uint_uint(&self) -> impl Iterator<Item = (u64, u64)> + '_ {
+        let sf = self.scale;
+        return self.iterable.cdf_iter()
+            .map(move |(key, offset)| (key, (offset as f64 * sf) as u64));
+        
+    }
+
+    // Code adapted from superslice,
+    // https://docs.rs/superslice/1.0.0/src/superslice/lib.rs.html
+    // which was copyright 2017 Alkis Evlogimenos under the Apache License.
+    pub fn lower_bound_by<F>(&self, f: F) -> usize
+    where F: Fn((u64, usize)) -> Ordering {
+        let mut size = self.len();
+        if size == 0 { return 0; }
+        
+        let mut base = 0usize;
+        while size > 1 {
+            let half = size / 2;
+            let mid = base + half;
+            let cmp = f(self.get_uint_usize(mid));
+            base = if cmp == Ordering::Less { mid } else { base };
+            size -= half;
+        }
+        let cmp = f(self.get_uint_usize(base));
+        base + (cmp == Ordering::Less) as usize
     }
     
-    #[allow(dead_code)]
-    pub fn lower_bound(&self, lookup: u64) -> usize {
-        return self.as_int_int().lower_bound_by(|(k, _)| k.cmp(&lookup));
-    }
-
-    pub fn iter_float_float(&self) -> ModelDataFFIterator {
-        let mut iter = self.model_data.iter_float_float();
-        iter.set_scale(self.scaling_factor);
-        return iter;
-    }
-    
-    pub fn iter_int_int(&self) -> ModelDataIIIterator {
-        let mut iter = self.model_data.iter_int_int();
-        iter.set_scale(self.scaling_factor);
-        return iter;
-    }
-
-    pub fn as_int_int(&self) -> &[(u64, u64)] {
-        return self.model_data.as_int_int();
-    }
-
-    pub fn into_data(self) -> ModelData {
-        return self.model_data.clone();
-    }
-}
-
-#[derive(Clone)]
-pub enum ModelData {
-    IntKeyToIntPos(Vec<(u64, u64)>),
-    #[allow(dead_code)]
-    FloatKeyToIntPos(Vec<(f64, u64)>),
-    #[allow(dead_code)]
-    IntKeyToFloatPos(Vec<(u64, f64)>),
-    FloatKeyToFloatPos(Vec<(f64, f64)>),
-}
-
-#[cfg(test)]
-macro_rules! vec_to_ii {
-    ($x:expr) => {
-        ($x).into_iter()
-            .map(|(x, y)| (x as u64, y as u64))
-            .collect()
-    };
-}
-
-macro_rules! extract_and_convert_tuple {
-    ($vec: expr, $idx: expr, $type1:ty, $type2:ty, $scale: expr) => {{
-        let (x, y) = $vec[$idx];
-        (x as $type1, (y as f64 * $scale) as $type2)
-    }};
-}
-
-
-macro_rules! define_iterator_type {
-    ($name: tt, $type1: ty, $type2: ty) => {
-        pub struct $name<'a> {
-            data: &'a ModelData,
-            idx: usize,
-            scale: f64,
-            stop: usize
-        }
-
-        impl<'a> $name<'a> {
-            fn new(data: &'a ModelData) -> $name<'a> {
-                return $name { data: data, idx: 0, scale: 1.0, stop: data.len() };
-            }
-
-            fn set_scale(&mut self, scale: f64) {
-                self.scale = scale;
-            }
-
-            pub fn bound(&mut self, start: usize, stop: usize) {
-                assert!(start < stop);
-                assert!(stop <= self.data.len());
-                self.idx = start;
-                self.stop = stop;
-            }
-        }
-
-        impl<'a> Iterator for $name<'a> {
-            type Item = ($type1, $type2);
-
-            fn next(&mut self) -> Option<Self::Item> {
-                if self.idx >= self.stop {
-                    return None;
-                }
-
-                let itm = match self.data {
-                    ModelData::FloatKeyToFloatPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2, self.scale)
-                    }
-                    ModelData::FloatKeyToIntPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2, self.scale)
-                    }
-                    ModelData::IntKeyToIntPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2, self.scale)
-                    }
-                    ModelData::IntKeyToFloatPos(data) => {
-                        extract_and_convert_tuple!(data, self.idx, $type1, $type2, self.scale)
-                    }
-                };
-                self.idx += 1;
-
-                return Some(itm);
-            }
-        }
-    };
-}
-
-
-define_iterator_type!(ModelDataFFIterator, f64, f64);
-define_iterator_type!(ModelDataIIIterator, u64, u64);
-//define_iterator_type_skip!(ModelDataIIIteratorSkip, u64, u64);
-//define_iterator_type!(ModelDataFIIterator, f64, u64);
-//define_iterator_type!(ModelDataIFIterator, u64, f64);
-
-impl ModelData {
-    pub fn iter_float_float(&self) -> ModelDataFFIterator {
-        return ModelDataFFIterator::new(&self);
-    }
-    pub fn iter_int_int(&self) -> ModelDataIIIterator {
-        return ModelDataIIIterator::new(&self);
-    }
-
-    /*pub fn iter_int_int_skip(&self, factor: usize) -> ModelDataIIIteratorSkip {
-        return ModelDataIIIteratorSkip::new(&self, factor);
-    }*/
-    //pub fn iter_float_int(&self) -> ModelDataFIIterator { return ModelDataFIIterator::new(&self); }
-    //pub fn iter_int_float(&self) -> ModelDataIFIterator { return ModelDataIFIterator::new(&self); }
-
-    pub fn empty() -> ModelData {
-        return ModelData::FloatKeyToFloatPos(vec![]);
-    }
-
-    #[cfg(test)]
-    fn into_int_int(self) -> Vec<(u64, u64)> {
-        return match self {
-            ModelData::FloatKeyToFloatPos(data) => vec_to_ii!(data),
-            ModelData::FloatKeyToIntPos(data) => vec_to_ii!(data),
-            ModelData::IntKeyToFloatPos(data) => vec_to_ii!(data),
-            ModelData::IntKeyToIntPos(data) => data,
-        };
-    }
-
-    fn as_int_int(&self) -> &[(u64, u64)] {
-        return match self {
-            ModelData::FloatKeyToFloatPos(_data) => panic!("as_int_int on float/float model data"),
-            ModelData::FloatKeyToIntPos(_data) => panic!("as_int_int on float/int model data"),
-            ModelData::IntKeyToFloatPos(_data) => panic!("as_int_int on int/float model data"),
-            ModelData::IntKeyToIntPos(data) => &data,
-        };
-    }
-
-    pub fn len(&self) -> usize {
-        return match self {
-            ModelData::FloatKeyToFloatPos(data) => data.len(),
-            ModelData::FloatKeyToIntPos(data) => data.len(),
-            ModelData::IntKeyToFloatPos(data) => data.len(),
-            ModelData::IntKeyToIntPos(data) => data.len(),
-        };
-    }
-
-    pub fn get(&self, idx: usize) -> (f64, f64) {
-        return match self {
-            ModelData::FloatKeyToFloatPos(data) => data[idx],
-            ModelData::FloatKeyToIntPos(data) => (data[idx].0, data[idx].1 as f64),
-            ModelData::IntKeyToFloatPos(data) => (data[idx].0 as f64, data[idx].1),
-            ModelData::IntKeyToIntPos(data) => (data[idx].0 as f64, data[idx].1 as f64),
-        };
-    }
-
-    pub fn get_key(&self, idx: usize) -> u64 {
-        return match self {
-            ModelData::FloatKeyToFloatPos(data) => data[idx].0 as u64,
-            ModelData::FloatKeyToIntPos(data) => data[idx].0 as u64, 
-            ModelData::IntKeyToFloatPos(data) => data[idx].0,
-            ModelData::IntKeyToIntPos(data) => data[idx].0
+    pub fn soft_copy(&self) -> RMITrainingData {
+        return RMITrainingData {
+            scale: self.scale,
+            iterable: Arc::clone(&self.iterable)
         };
     }
 }
+
+/*struct RMITrainingDataIteratorProviderWrapper {
+    orig: Arc<Box<dyn RMITrainingDataIteratorProvider>>
+}
+
+impl RMITrainingDataIteratorProvider for RMITrainingDataIteratorProviderWrapper {
+
+}*/
+
 
 pub enum ModelInput {
     Int(u64),
@@ -578,7 +490,7 @@ mod tests {
 
         let v = ModelData::IntKeyToIntPos(data.clone());
 
-        let iterated: Vec<(u64, u64)> = v.iter_int_int().collect();
+        let iterated: Vec<(u64, u64)> = v.iter_uint_uint().collect();
         assert_eq!(data, iterated);
     }
 }
