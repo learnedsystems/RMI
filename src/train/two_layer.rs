@@ -29,10 +29,10 @@ fn build_models_from(data: &RMITrainingData,
     let mut leaf_models: Vec<Box<dyn Model>> = Vec::with_capacity(num_models as usize);
     let mut second_layer_data = Vec::with_capacity((end_idx - start_idx) / num_models as usize);
     let mut last_target = first_model_idx;
-
+           
     let bounded_it = data.iter_uint_usize()
         .skip(start_idx)
-        .take((data.len() - start_idx) - end_idx);
+        .take(end_idx - start_idx);
         
     for (x, y) in bounded_it {
         let model_pred = top_model.predict_to_int(x.into()) as usize;

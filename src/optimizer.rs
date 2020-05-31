@@ -185,7 +185,7 @@ fn measure_rmis(data: &RMITrainingData,
                 configs: &[(String, u64)]) -> Vec<RMIStatistics> {
     let pbar = ProgressBar::new(configs.len() as u64);
     
-   configs.par_iter()
+   configs.iter()
         .map(|(models, branch_factor)| {
             let mut loc_data = data.soft_copy();
             let res = train::train(&mut loc_data, models, *branch_factor);
