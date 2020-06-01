@@ -684,11 +684,10 @@ inline size_t FCLAMP(double inp, double bound) {{
 
 
 pub fn output_rmi(namespace: &str,
-                  last_layer_errors: bool,
                   trained_model: TrainedRMI,
                   num_rows: usize,
                   build_time: u128,
-                  data_dir: Option<&str>) -> Result<(), std::io::Error> {
+                  data_dir: &str) -> Result<(), std::io::Error> {
     
     let f1 = File::create(format!("{}.cpp", namespace)).expect("Could not write RMI CPP file");
     let mut bw1 = BufWriter::new(f1);
@@ -700,21 +699,8 @@ pub fn output_rmi(namespace: &str,
     let f3 = File::create(format!("{}.h", namespace)).expect("Could not write RMI header file");
     let mut bw3 = BufWriter::new(f3);
     
-    let lle = if last_layer_errors {
-        Some(trained_model.last_layer_max_l1s)
-    } else {
-        None
-    };
-
-    let conf = match data_dir {
-        None => {
-            assert!(!last_layer_errors,
-                    "Cannot directly embed RMI data and track last level errors.");
-            StorageConf::Embed
-        },
-        Some(s) => StorageConf::Disk(String::from(s))
-    };
-
+    let lle = Some(trained_model.last_layer_max_l1s);
+    let conf = StorageConf::Disk(String::from(data_dir));
     
     return generate_code(
         &mut bw1,

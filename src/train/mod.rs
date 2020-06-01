@@ -107,7 +107,7 @@ fn validate(model_spec: &[String]) {
              correct);
 }*/
 
-pub fn train(data: &mut RMITrainingData,
+pub fn train(data: &RMITrainingData,
              model_spec: &str, branch_factor: u64) -> TrainedRMI {
     
     let (model_list, last_model): (Vec<String>, String) = {
@@ -118,7 +118,7 @@ pub fn train(data: &mut RMITrainingData,
     };
 
     if model_list.len() == 1 {
-        let res = two_layer::train_two_layer(data, &model_list[0],
+        let res = two_layer::train_two_layer(&mut data.soft_copy(), &model_list[0],
                                              &last_model, branch_factor);
         return res;
     }

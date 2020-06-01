@@ -58,10 +58,6 @@ fn main() {
              .long("downsample")
              .value_name("factor")
              .help("downsample the data by an integer factor (for faster training)"))
-        .arg(Arg::with_name("last-layer-errors")
-             .long("last-layer-errors")
-             .short("e")
-             .help("cause the lookup function to return a maximum search distance in addition to a guess"))
         .arg(Arg::with_name("dump-ll-model-data")
              .long("dump-ll-model-data")
              .value_name("model_index")
@@ -110,7 +106,7 @@ fn main() {
         .map(|x| x.parse::<usize>().unwrap())
         .unwrap_or(1);
 
-    let data_dir = matches.value_of("data-path");
+    let data_dir = matches.value_of("data-path").unwrap_or("rmi_data");
     
     if matches.value_of("namespace").is_some() && matches.value_of("param-grid").is_some() {
         panic!("Can only specify one of namespace or param-grid");
@@ -167,12 +163,8 @@ fn main() {
                     Some(s) => Some(String::from(s)),
                     None => None
                 };
-                let bsearch = match el["binary"].as_bool() {
-                    Some(b) => b,
-                    None => false
-                };
 
-                to_test.push((layers, branching, namespace, bsearch));
+                to_test.push((layers, branching, namespace));
             }
 
             trace!("# RMIs to train: {}", to_test.len());
@@ -182,7 +174,7 @@ fn main() {
                           .template("{pos} / {len} ({msg}) {wide_bar} {eta}"));
 
             let train_func =
-                |(models, branch_factor, namespace, bsearch): &(String, u64, Option<String>, bool)| {
+                |(models, branch_factor, namespace): &(String, u64, Option<String>)| {
                     trace!("Training RMI {} with branching factor {}",
                            models, *branch_factor);
                     
@@ -211,14 +203,12 @@ fn main() {
                         "max log2 error" => trained_model.model_max_log2_error,
                         "size binary search" => size_bs,
                         "size linear search" => size_ls,
-                        "namespace" => namespace.clone(),
-                        "binary" => *bsearch
+                        "namespace" => namespace.clone()
                     };
                     
                     if let Some(nmspc) = namespace {
                         codegen::output_rmi(
                             &nmspc,
-                            *bsearch,
                             trained_model,
                             num_rows,
                             build_time,
@@ -260,7 +250,6 @@ fn main() {
             .unwrap()
             .parse::<u64>()
             .unwrap();
-        let last_layer_errors = matches.is_present("last-layer-errors");
 
         let start_time = SystemTime::now();
         let trained_model = train(&mut data, models, branch_factor);
@@ -321,7 +310,6 @@ fn main() {
         if !matches.is_present("no-code") {
             codegen::output_rmi(
                 &namespace,
-                last_layer_errors,
                 trained_model,
                 num_rows,
                 build_time,
