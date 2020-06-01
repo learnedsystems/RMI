@@ -93,7 +93,8 @@ impl RadixTable {
 
         let mut last_radix = 0;
         for (x, y) in data.iter_uint_uint() {
-            let current_radix = ((x << prefix) >> prefix) >> (64 - (prefix + bits));
+            let num_bits = if prefix + bits > 64 { 0 } else { 64 - (prefix + bits) };
+            let current_radix = ((x << prefix) >> prefix) >> num_bits;
             if current_radix == last_radix { continue; }
             assert!(current_radix < hint_table.len() as u64);
 
@@ -123,9 +124,10 @@ impl Model for RadixTable {
         let as_int: u64 = inp.as_int();
         let prefix = self.prefix_bits;
         let bits = self.table_bits;
-        let res = ((as_int << prefix) >> prefix) >> (64 - (bits + prefix));
-
+        let num_bits = if prefix + bits > 64 { 0 } else { 64 - (prefix + bits) };
+        let res = ((as_int << prefix) >> prefix) >> num_bits;
         let idx = self.hint_table[res as usize] as u64;
+        
         return idx;
     }
 
@@ -143,12 +145,18 @@ impl Model for RadixTable {
     }
 
     fn code(&self) -> String {
+        let num_bits = if self.prefix_bits + self.table_bits > 64 {
+            0
+        } else {
+            64 - (self.prefix_bits + self.table_bits)
+        };
+        
         return format!(
             "
 inline uint64_t radix_table(const uint32_t* table, const uint64_t inp) {{
     uint32_t prefix_length = table[0];
     return (table+1)[((inp << prefix_length) >> prefix_length) >> (64 - {})];
-}}", self.prefix_bits + self.table_bits
+}}", num_bits
         );
     }
 

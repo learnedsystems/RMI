@@ -10,8 +10,10 @@ use crate::train::{validate, train_model, TrainedRMI};
 use crate::train::lower_bound_correction::LowerBoundCorrection;
 use log::*;
 
-fn error_between(v1: u64, v2: u64) -> u64 {
-    return u64::max(v1, v2) - u64::min(v1, v2);
+fn error_between(v1: u64, v2: u64, max_pred: u64) -> u64 {
+    let pred1 = u64::min(v1, max_pred);
+    let pred2 = u64::min(v2, max_pred);
+    return u64::max(pred1, pred2) - u64::min(pred1, pred2);
 }
 
 fn build_models_from(data: &RMITrainingData,
@@ -36,9 +38,10 @@ fn build_models_from(data: &RMITrainingData,
         
     for (x, y) in bounded_it {
         let model_pred = top_model.predict_to_int(x.into()) as usize;
-        assert!(top_model.needs_bounds_check() || model_pred < start_idx + num_models,
-                "Top model gave an index of {} which is out of bounds of {}",
-                model_pred, start_idx + num_models);
+        assert!(top_model.needs_bounds_check() || model_pred < first_model_idx + num_models,
+                "Top model gave an index of {} which is out of bounds of {}. \
+                Subset range: {} to {}",
+                model_pred, start_idx + num_models, start_idx, end_idx);
         let target = usize::min(first_model_idx + num_models - 1, model_pred);
         assert!(target >= last_target);
         
@@ -102,7 +105,23 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
     md_container.set_scale(num_leaf_models as f64 / num_rows as f64);
     let top_model = train_model(layer1_model, &md_container);
 
-    info!("Training second-level {} model layer (num models = {})", layer2_model, num_leaf_models);
+    // Check monotonicity if in debug mode
+    #[cfg(debug_assertions)]
+    {
+        let mut last_pred = 0;
+        for (x, _y) in md_container.iter_uint_usize() {
+            let prediction = top_model.predict_to_int(x.into());
+            debug_assert!(prediction >= last_pred,
+                          "Top model {} was non-monotonic on input {}",
+                          layer1_model, x);
+            last_pred = prediction;
+        }
+        trace!("Top model was monotonic.");
+    }
+
+    
+    info!("Training second-level {} model layer (num models = {})",
+          layer2_model, num_leaf_models);
     md_container.set_scale(1.0);
 
     // find a prediction boundary near the middle
@@ -113,16 +132,26 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         return model_target.cmp(&midpoint_model);
     });
 
+    // make sure the split point that we got is valid
+    if split_idx > 0 && split_idx < md_container.len() {
+        let key_at = top_model.predict_to_int(md_container.get_key(split_idx).into());
+        let key_pr = top_model.predict_to_int(md_container.get_key(split_idx - 1).into());
+        assert!(key_at > key_pr);
+        trace!("Split point is valid, maps to {} (prev maps to {})",
+               key_at, key_pr);
+    }
+
     let mut leaf_models = if split_idx >= md_container.len() {
         warn!("All of the data is being mapped into less than half the number of leaf models. Parallelism disabled.");
         build_models_from(&md_container, &top_model, layer2_model,
                           0, md_container.len(), 0,
                           num_leaf_models as usize)
     } else {
-    
         let split_idx_target = u64::min(num_leaf_models - 1,
                                         top_model.predict_to_int(md_container.get_key(split_idx).into()))
             as usize;
+        trace!("Split index was: {} (target: {})", split_idx, split_idx_target);
+
         
 
         let first_half_models = split_idx_target as usize;
@@ -180,7 +209,7 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
         
         let pred = leaf_models[target].predict_to_int(x.into());
-        let err = error_between(pred, y);
+        let err = error_between(pred, y, md_container.len() as u64);
 
         let cur_val = last_layer_max_l1s[target];
         last_layer_max_l1s[target] = (cur_val.0 + 1, u64::max(err, cur_val.1));
@@ -199,7 +228,7 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         let upper_error = {
             let (idx_of_next, key_of_next) = lb_corrections.next(leaf_idx);
             let pred = leaf_models[leaf_idx].predict_to_int((key_of_next - 1).into());
-            error_between(pred, idx_of_next + 1)
+            error_between(pred, idx_of_next + 1, md_container.len() as u64)
         };
         
         let lower_error = {
@@ -209,7 +238,7 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
             let first_idx = lb_corrections.next_index(prev_idx);
 
             let pred = leaf_models[leaf_idx].predict_to_int((first_key_before + 1).into());
-            error_between(pred, first_idx)
+            error_between(pred, first_idx, md_container.len() as u64)
         };
           
             

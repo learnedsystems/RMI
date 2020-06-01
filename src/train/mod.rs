@@ -117,7 +117,7 @@ pub fn train(data: &mut RMITrainingData,
         (all_models, last)
     };
 
-    if model_list.len() == 1 && data.len() > 1_000_000 {
+    if model_list.len() == 1 {
         let res = two_layer::train_two_layer(data, &model_list[0],
                                              &last_model, branch_factor);
         return res;
