@@ -22,8 +22,8 @@ fn chi2(data: &RMITrainingData, max_bin: u64, model: &BalancedRadixModel) -> f64
     // induced by this model.
     let mut counts = vec![0; max_bin as usize];
 
-    for (x, _y) in data.iter_uint_uint() {
-        counts[model.predict_to_int(x.into()) as usize] += 1;
+    for (x, _y) in data.iter() {
+        counts[model.predict_to_int(x) as usize] += 1;
     }
 
     let expected = data.len() as f64 / max_bin as f64;
@@ -91,9 +91,9 @@ impl BalancedRadixModel {
             };
         }
 
-        let largest_value = data.iter_uint_uint().map(|(_x, y)| y).max().unwrap();
+        let largest_value = data.iter().map(|(_x, y)| y).max().unwrap();
 
-        return bradix(data, largest_value);
+        return bradix(data, largest_value as u64);
     }
 }
 

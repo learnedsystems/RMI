@@ -16,7 +16,7 @@ fn linear_splines(data: &RMITrainingData) -> (f64, f64) {
     }
 
     if data.len() == 1 {
-        return (data.get(0).1, 0.0);
+        return (data.get(0).1 as f64, 0.0);
     }
 
     let first_pt = data.get(0);
@@ -24,11 +24,12 @@ fn linear_splines(data: &RMITrainingData) -> (f64, f64) {
 
     if first_pt.0 == last_pt.0 {
         // data is all duplicates!
-        return (data.get(0).1, 0.0);
+        return (data.get(0).1 as f64, 0.0);
     }
 
-    let slope = (first_pt.1 - last_pt.1) / (first_pt.0 - last_pt.0);
-    let intercept = first_pt.1 - slope * first_pt.0;
+    let slope = (first_pt.1 as f64 - last_pt.1 as f64)
+        / (first_pt.0.as_float() - last_pt.0.as_float());
+    let intercept = first_pt.1 as f64 - slope * first_pt.0.as_float();
 
     return (intercept, slope);
 }

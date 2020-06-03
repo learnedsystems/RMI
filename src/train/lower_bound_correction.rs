@@ -103,7 +103,7 @@ impl LowerBoundCorrection {
         let mut last_target = 0;
         let mut current_run_length = 0;
         let mut current_run_key = data.get_key(0);
-        for (x, y) in data.iter_model_input() {
+        for (x, y) in data.iter() {
             let leaf_idx = pred_func(x.into());
             let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
             

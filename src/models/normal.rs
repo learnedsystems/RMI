@@ -32,12 +32,14 @@ fn ncdf(loc_data: &RMITrainingData) -> (f64, f64, f64) {
 
     let n = loc_data.len() as f64;
 
-    for (x, y) in loc_data.iter_float_float() {
+    for (inp, y) in loc_data.iter() {
+        let x = inp.as_float();
         mean += x / n;
-        scale = f64::max(scale, y);
+        scale = f64::max(scale, y as f64);
     }
     
-    for (x, _y) in loc_data.iter_float_float() {
+    for (inp, _y) in loc_data.iter() {
+        let x = inp.as_float();
         stdev += (x - mean).powf(2.0)
     }
 
@@ -53,13 +55,15 @@ fn lncdf(loc_data: &RMITrainingData) -> (f64, f64, f64) {
     let mut stdev = 0.0;
 
     let n = loc_data.len() as f64;
-    for (x, y) in loc_data.iter_float_float() {
+    for (inp, y) in loc_data.iter() {
+        let x = inp.as_float();
         let lnx = if !f64::is_finite(x.ln()) { 0.0 } else { x.ln() };
         mean += lnx / n;
-        scale = f64::max(scale, y);
+        scale = f64::max(scale, y as f64);
     }
 
-    for (x, _y) in loc_data.iter_float_float() {
+    for (inp, _y) in loc_data.iter() {
+        let x = inp.as_float();
         let lnx = if !f64::is_finite(x.ln()) { 0.0 } else { x.ln() };
         stdev += (lnx - mean).powf(2.0)
     }

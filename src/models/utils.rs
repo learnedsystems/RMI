@@ -26,9 +26,9 @@ pub fn common_prefix_size(data: &RMITrainingData) -> u8 {
     let mut any_ones: u64 = 0;
     let mut no_ones: u64 = !0;
 
-    for (x, _y) in data.iter_uint_uint() {
-        any_ones |= x;
-        no_ones &= x;
+    for (x, _y) in data.iter() {
+        any_ones |= x.as_int();
+        no_ones &= x.as_int();
     }
 
     let any_zeros = !no_ones;
@@ -109,14 +109,15 @@ macro_rules! plr_with {
         let mut segments = Vec::new();
 
         let mut last_x = -1.0;
-        for (x, y) in $data.iter_float_float() {
+        for (inp, y) in $data.iter() {
+            let x = inp.as_float();
             if (x - last_x).abs() < std::f64::EPSILON {
                 continue;
             } else {
                 last_x = x;
             }
             
-            if let Some(seg) = plr.process(x, y) {
+            if let Some(seg) = plr.process(x, y as f64) {
                 assert!(! f64::is_nan(seg.slope));
                 assert!(! f64::is_nan(seg.intercept));
                 segments.push(seg);
@@ -144,7 +145,7 @@ pub fn plr(data: &RMITrainingData, delta: f64, optimal: bool) -> (Vec<u64>, Vec<
         .map(|seg| seg.start as u64)
         .collect();
 
-    points[0] = u64::min(points[0], data.iter_uint_uint().next().unwrap().0);
+    points[0] = u64::min(points[0], data.iter().next().unwrap().0.as_int());
     
     let coeffs = segments.iter()
         .flat_map(|seg| vec![seg.slope, seg.intercept])

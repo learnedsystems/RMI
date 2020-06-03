@@ -61,8 +61,8 @@ fn slr<T: Iterator<Item = (f64, f64)>>(loc_data: T) -> (f64, f64) {
 fn loglinear_slr(data: &RMITrainingData) -> (f64, f64) {
     // log all of the outputs, omit any item that doesn't have a valid log
     let transformed_data: Vec<(f64, f64)> = data
-        .iter_float_float()
-        .map(|(x, y)| (x, y.ln()))
+        .iter()
+        .map(|(x, y)| (x.as_float(), (y as f64).ln()))
         .filter(|(_, y)| y.is_finite())
         .collect();
 
@@ -77,7 +77,9 @@ pub struct LinearModel {
 
 impl LinearModel {
     pub fn new(data: &RMITrainingData) -> LinearModel {
-        return LinearModel { params: slr(data.iter_float_float()) };
+        let params = slr(data.iter()
+                         .map(|(inp, offset)| (inp.as_float(), offset as f64)));
+        return LinearModel { params };
     }
 }
 
@@ -246,11 +248,12 @@ impl RobustLinearModel {
         let bnd = usize::max(1, ((total_items as f64) * 0.0001) as usize);
         assert!(bnd*2+1 < data.len());
         
-        let iter = data.iter_float_float()
+        let iter = data.iter()
             .skip(bnd)
             .take(data.len() - 2*bnd);
 
-        let robust_params = slr(iter);
+        let robust_params = slr(iter
+                                .map(|(inp, offset)| (inp.as_float(), offset as f64)));
         
         return RobustLinearModel {
             params: robust_params

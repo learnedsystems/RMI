@@ -21,33 +21,35 @@ fn cubic(data: &RMITrainingData) -> (f64, f64, f64, f64) {
     }
 
     if data.len() == 1 {
-        return (0.0, 0.0, 0.0, data.get(0).1);
+        return (0.0, 0.0, 0.0, data.get(0).1 as f64);
     }
 
     // ensure we have at least two unique values
     {
         let candidate = data.get(0).0;
-        let uniq = data.iter_float_float().any(|(x, _y)| x != candidate);
+        let uniq = data.iter().any(|(x, _y)| x != candidate);
 
         if !uniq {
             // all the same value!
-            return (0.0, 0.0, 0.0, data.get(0).1);
+            return (0.0, 0.0, 0.0, data.get(0).1 as f64);
         }
     }
 
-    let (xmin, ymin) = data.get(0);
-    let (xmax, ymax) = data.get(data.len() - 1);
+    let first_pt = data.get(0);
+    let last_pt = data.get(data.len() - 1);
+    let (xmin, ymin) = (first_pt.0.as_float(), first_pt.1 as f64);
+    let (xmax, ymax) = (last_pt.0.as_float(), last_pt.1 as f64);
 
     let (x1, y1) = (0.0, 0.0);
     let (x2, y2) = (1.0, 1.0);
 
     let mut m1 = {
         let (xn, yn) = data
-            .iter_float_float()
-            .find(|&(tx, _ty)| scale!(tx, xmin, xmax) > 0.0)
+            .iter()
+            .find(|&(tx, _ty)| scale!(tx.as_float(), xmin, xmax) > 0.0)
             .unwrap();
 
-        let (sxn, syn) = (scale!(xn, xmin, xmax), scale!(yn, ymin, ymax));
+        let (sxn, syn) = (scale!(xn.as_float(), xmin, xmax), scale!(yn as f64, ymin, ymax));
         (syn - y1) / (sxn - x1)
     };
 
@@ -55,10 +57,10 @@ fn cubic(data: &RMITrainingData) -> (f64, f64, f64, f64) {
         let (xp, yp) = (0..data.len())
             .rev()
             .map(|idx| data.get(idx))
-            .find(|&(tx, _ty)| scale!(tx, xmin, xmax) < 1.0)
+            .find(|&(tx, _ty)| scale!(tx.as_float(), xmin, xmax) < 1.0)
             .unwrap();
 
-        let (sxp, syp) = (scale!(xp, xmin, xmax), scale!(yp, ymin, ymax));
+        let (sxp, syp) = (scale!(xp.as_float(), xmin, xmax), scale!(yp as f64, ymin, ymax));
         (y2 - syp) / (x2 - sxp)
     };
 
@@ -115,12 +117,12 @@ impl CubicSplineModel {
         let mut our_error = 0.0;
         let mut lin_error = 0.0;
 
-        for (x, y) in data.iter_float_float() {
-            let c_pred = cubic.predict_to_float(x.into());
-            let l_pred = linear.predict_to_float(x.into());
+        for (x, y) in data.iter() {
+            let c_pred = cubic.predict_to_float(x);
+            let l_pred = linear.predict_to_float(x);
 
-            our_error += (c_pred - y).abs();
-            lin_error += (l_pred - y).abs();
+            our_error += (c_pred - (y as f64)).abs();
+            lin_error += (l_pred - (y as f64)).abs();
         }
 
         if lin_error < our_error {

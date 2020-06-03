@@ -27,8 +27,6 @@ fn bottom_up_plr(data: &RMITrainingData) -> (Vec<u64>, Vec<f64>) {
         coeffs = c;
     }
     
-    assert!(points[0] <= data.get_uint(0).0);
-    
     return (points, coeffs);
 }
 

@@ -20,7 +20,7 @@ impl RadixModel {
             return RadixModel { params: (0, 0) };
         }
 
-        let largest_value = data.iter_uint_uint().map(|(_x, y)| y).max().unwrap();
+        let largest_value = data.iter().map(|(_x, y)| y).max().unwrap() as u64;
         let bits = num_bits(largest_value);
         trace!(
             "Radix layer using {} bits, from largest value {} (max layers: {})",
@@ -92,7 +92,8 @@ impl RadixTable {
         let mut hint_table: Vec<u32> = vec![0 ; 1 << bits];
 
         let mut last_radix = 0;
-        for (x, y) in data.iter_uint_uint() {
+        for (inp, y) in data.iter() {
+            let x = inp.as_int();
             let num_bits = if prefix + bits > 64 { 0 } else { 64 - (prefix + bits) };
             let current_radix = ((x << prefix) >> prefix) >> num_bits;
             if current_radix == last_radix { continue; }

@@ -32,7 +32,7 @@ fn build_models_from(data: &RMITrainingData,
     let mut second_layer_data = Vec::with_capacity((end_idx - start_idx) / num_models as usize);
     let mut last_target = first_model_idx;
            
-    let bounded_it = data.iter_model_input()
+    let bounded_it = data.iter()
         .skip(start_idx)
         .take(end_idx - start_idx);
         
@@ -109,10 +109,10 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
     #[cfg(debug_assertions)]
     {
         let mut last_pred = 0;
-        for (x, _y) in md_container.iter_uint_usize() {
-            let prediction = top_model.predict_to_int(x.into());
+        for (x, _y) in md_container.iter() {
+            let prediction = top_model.predict_to_int(x);
             debug_assert!(prediction >= last_pred,
-                          "Top model {} was non-monotonic on input {}",
+                          "Top model {} was non-monotonic on input {:?}",
                           layer1_model, x);
             last_pred = prediction;
         }
@@ -204,7 +204,7 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
     info!("Computing last level errors...");
     // evaluate model, compute last level errors
     let mut last_layer_max_l1s = vec![(0, 0) ; num_leaf_models as usize];
-    for (x, y) in md_container.iter_model_input() {
+    for (x, y) in md_container.iter() {
         let leaf_idx = top_model.predict_to_int(x);
         let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
         

@@ -46,14 +46,7 @@ pub enum KeyType {
 
 pub trait RMITrainingDataIteratorProvider: Send + Sync {
     fn len(&self) -> usize;
-    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (u64, usize)> + '_> {
-        panic!("This CDF iterator does not support u64 keys.");
-    }
-    
-    fn cdf_iter_float_keys(&self) -> Box<dyn Iterator<Item = (f64, usize)> + '_> {
-        panic!("This CDF iterator does not support f64 keys.");
-    }
-
+    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (ModelInput, usize)> + '_>;
     fn key_type(&self) -> KeyType;
 }
 
@@ -62,8 +55,10 @@ impl RMITrainingDataIteratorProvider for Vec<(u64, usize)> {
         return Vec::len(&self);
     }
 
-    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (u64, usize)> + '_> {
-        return Box::new(self.iter().cloned());
+    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (ModelInput, usize)> + '_> {
+        return Box::new(self.iter()
+                        .cloned()
+                        .map(|(key, offset)| (key.into(), offset)));
     }
 
     fn key_type(&self) -> KeyType { return KeyType::U64; }
@@ -74,8 +69,10 @@ impl RMITrainingDataIteratorProvider for Vec<(f64, usize)> {
         return Vec::len(&self);
     }
 
-    fn cdf_iter_float_keys(&self) -> Box<dyn Iterator<Item = (f64, usize)> + '_> {
-        return Box::new(self.iter().cloned());
+    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (ModelInput, usize)> + '_> {
+        return Box::new(self.iter()
+                        .cloned()
+                        .map(|(key, offset)| (key.into(), offset)));
     }
 
     fn key_type(&self) -> KeyType { return KeyType::F64; }
@@ -86,22 +83,8 @@ impl RMITrainingDataIteratorProvider for Vec<(ModelInput, usize)> {
         return Vec::len(&self);
     }
 
-    fn cdf_iter_float_keys(&self) -> Box<dyn Iterator<Item = (f64, usize)> + '_> {
-        if let KeyType::U64 = self.key_type() {
-            panic!("Iter float keys called on provider with int model inputs");
-        }
-
-        return Box::new(self.iter()
-                        .map(|(mi, offset)| (mi.as_float(), *offset)));
-    }
-
-    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (u64, usize)> + '_> {
-        if let KeyType::F64 = self.key_type() {
-            panic!("Iter keys called on provider with float model inputs");
-        }
-
-        return Box::new(self.iter()
-                        .map(|(mi, offset)| (mi.as_int(), *offset)));
+    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (ModelInput, usize)> + '_> {
+        return Box::new(self.iter().cloned());
     }
 
     fn key_type(&self) -> KeyType {
@@ -137,92 +120,23 @@ impl RMITrainingData {
         self.scale = scale;
     }
 
-    pub fn get(&self, idx: usize) -> (f64, f64) {
-        return self.iter_float_float()
+    pub fn get(&self, idx: usize) -> (ModelInput, usize) {
+        return self.iter()
             .skip(idx)
             .next().unwrap();
     }
 
     pub fn get_key(&self, idx: usize) -> ModelInput {
-        return self.iter_model_input()
+        return self.iter()
             .skip(idx)
             .next().unwrap().0;
     }
 
-
-    pub fn get_uint(&self, idx: usize) -> (u64, u64) {
-        return self.iter_uint_uint()
-            .skip(idx)
-            .next().unwrap();
-    }
-
-    pub fn get_uint_usize(&self, idx: usize) -> (u64, usize) {
-        return self.iter_uint_usize()
-            .skip(idx)
-            .next().unwrap();
-    }
-
-    pub fn iter_model_input(&self) -> Box<dyn Iterator<Item = (ModelInput, usize)> + '_> {
+    pub fn iter(&self) -> impl Iterator<Item = (ModelInput, usize)> + '_ {
         let sf = self.scale;
-        match self.iterable.key_type() {
-            KeyType::U64 => {
-                Box::new(self.iterable.cdf_iter()
-                         .map(move |(key, offset)|
-                              (key.into(), (offset as f64 * sf) as usize)))
-            }
-            KeyType::F64 => {
-                Box::new(self.iterable.cdf_iter_float_keys()
-                         .map(move |(key, offset)|
-                              (key.into(), (offset as f64 * sf) as usize)))
-            }
-        }
-    }
-
-    pub fn iter_float_float(&self) -> Box<dyn Iterator<Item = (f64, f64)> + '_> {
-        let sf = self.scale;
-        match self.iterable.key_type() {
-            KeyType::U64 => {
-                Box::new(self.iterable.cdf_iter()
-                         .map(move |(key, offset)| (key as f64, offset as f64 * sf)))
-            }
-            KeyType::F64 => {
-                Box::new(self.iterable.cdf_iter_float_keys()
-                         .map(move |(key, offset)| (key, offset as f64 * sf)))
-            }
-        }
-    }
-
-    pub fn iter_uint_usize(&self) -> Box<dyn Iterator<Item = (u64, usize)> + '_> {
-        let sf = self.scale;
-        match self.iterable.key_type() {
-            KeyType::U64 => {
-                Box::new(self.iterable.cdf_iter()
-                         .map(move |(key, offset)|
-                              (key, (offset as f64 * sf) as usize)))
-            }
-            KeyType::F64 => {
-                Box::new(self.iterable.cdf_iter_float_keys()
-                         .map(move |(key, offset)|
-                              (key as u64, (offset as f64 * sf) as usize)))
-            }
-        }
-    }
-
-    pub fn iter_uint_uint(&self) -> Box<dyn Iterator<Item = (u64, u64)> + '_> {
-        let sf = self.scale;
-        match self.iterable.key_type() {
-            KeyType::U64 => {
-                Box::new(self.iterable.cdf_iter()
-                         .map(move |(key, offset)|
-                              (key, (offset as f64 * sf) as u64)))
-            }
-            KeyType::F64 => {
-                Box::new(self.iterable.cdf_iter_float_keys()
-                         .map(move |(key, offset)|
-                              (key as u64, (offset as f64 * sf) as u64)))
-           
-            }
-        }
+        return Box::new(self.iterable.cdf_iter()
+                        .map(move |(key, offset)|
+                             (key.into(), (offset as f64 * sf) as usize)));
     }
 
     pub fn key_type(&self) -> KeyType {
@@ -233,7 +147,7 @@ impl RMITrainingData {
     // https://docs.rs/superslice/1.0.0/src/superslice/lib.rs.html
     // which was copyright 2017 Alkis Evlogimenos under the Apache License.
     pub fn lower_bound_by<F>(&self, f: F) -> usize
-    where F: Fn((u64, usize)) -> Ordering {
+    where F: Fn((ModelInput, usize)) -> Ordering {
         let mut size = self.len();
         if size == 0 { return 0; }
         
@@ -241,11 +155,11 @@ impl RMITrainingData {
         while size > 1 {
             let half = size / 2;
             let mid = base + half;
-            let cmp = f(self.get_uint_usize(mid));
+            let cmp = f(self.get(mid));
             base = if cmp == Ordering::Less { mid } else { base };
             size -= half;
         }
-        let cmp = f(self.get_uint_usize(base));
+        let cmp = f(self.get(base));
         base + (cmp == Ordering::Less) as usize
     }
     
@@ -266,7 +180,7 @@ impl RMITrainingDataIteratorProvider for RMITrainingDataIteratorProviderWrapper 
 }*/
 
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ModelInput {
     Int(u64),
     Float(f64),
