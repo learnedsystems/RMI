@@ -54,10 +54,6 @@ fn main() {
         .arg(Arg::with_name("no-code")
              .long("no-code")
              .help("Skip code generation"))
-        .arg(Arg::with_name("downsample")
-             .long("downsample")
-             .value_name("factor")
-             .help("downsample the data by an integer factor (for faster training)"))
         .arg(Arg::with_name("dump-ll-model-data")
              .long("dump-ll-model-data")
              .value_name("model_index")
@@ -101,10 +97,7 @@ fn main() {
     rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global().unwrap();
     
     let fp = matches.value_of("input").unwrap();
-    let downsample = matches
-        .value_of("downsample")
-        .map(|x| x.parse::<usize>().unwrap())
-        .unwrap_or(1);
+
 
     let data_dir = matches.value_of("data-path").unwrap_or("rmi_data");
     
@@ -115,9 +108,13 @@ fn main() {
     info!("Reading {}...", fp);
 
     let (num_rows, mut data) = if fp.contains("uint64") {
-        load_data(&fp, DataType::UINT64, downsample)
+        load_data(&fp, DataType::UINT64)
+    } else if fp.contains("uint32") {
+        load_data(&fp, DataType::UINT32)
+    } else if fp.contains("f64") {
+        load_data(&fp, DataType::FLOAT64)
     } else {
-        load_data(&fp, DataType::UINT32, downsample)
+        panic!("Data file must contain uint64, uint32, or f64.");
     };
 
     if matches.is_present("optimize") {
@@ -210,7 +207,6 @@ fn main() {
                         codegen::output_rmi(
                             &nmspc,
                             trained_model,
-                            num_rows,
                             build_time,
                             data_dir).unwrap();
                         
@@ -311,7 +307,6 @@ fn main() {
             codegen::output_rmi(
                 &namespace,
                 trained_model,
-                num_rows,
                 build_time,
                 data_dir).unwrap();
         } else {

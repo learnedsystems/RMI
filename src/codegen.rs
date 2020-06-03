@@ -685,7 +685,6 @@ inline size_t FCLAMP(double inp, double bound) {{
 
 pub fn output_rmi(namespace: &str,
                   trained_model: TrainedRMI,
-                  num_rows: usize,
                   build_time: u128,
                   data_dir: &str) -> Result<(), std::io::Error> {
     
@@ -707,7 +706,7 @@ pub fn output_rmi(namespace: &str,
         &mut bw2,
         &mut bw3,
         namespace,
-        num_rows,
+        trained_model.num_rows,
         trained_model.rmi,
         lle,
         conf,

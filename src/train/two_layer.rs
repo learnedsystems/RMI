@@ -282,6 +282,7 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         .map(|(_n, err)| err).collect();
     
     return TrainedRMI {
+        num_rows: md_container.len(),
         model_avg_error,
         model_avg_l2_error,
         model_avg_log2_error,

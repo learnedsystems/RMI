@@ -13,6 +13,7 @@ mod two_layer;
 mod lower_bound_correction;
 
 pub struct TrainedRMI {
+    pub num_rows: usize,
     pub model_avg_error: f64,
     pub model_avg_l2_error: f64,
     pub model_avg_log2_error: f64,

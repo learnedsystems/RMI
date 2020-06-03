@@ -10,18 +10,17 @@
 use crate::models::RMITrainingData;
 use byteorder::{LittleEndian, ReadBytesExt};
 use log::debug;
-use log::*;
 use std::fs::File;
 use std::io::BufReader;
 
 pub enum DataType {
     UINT64,
     UINT32,
+    FLOAT64
 }
 
 pub fn load_data(filepath: &str,
-                 dt: DataType,
-                 downsample: usize) -> (usize, RMITrainingData) {
+                 dt: DataType) -> (usize, RMITrainingData) {
     let fd = File::open(filepath).unwrap_or_else(|_| {
         panic!("Unable to open data file at {}", filepath)
     });
@@ -30,19 +29,26 @@ pub fn load_data(filepath: &str,
 
     let num_items = reader.read_u64::<LittleEndian>().unwrap() as usize;
 
-    let keys = match dt {
+    return match dt {
         DataType::UINT32 => {
             let mut keys = vec![0; num_items];
             reader.read_u32_into::<LittleEndian>(&mut keys).unwrap();
-            keys.into_iter().map(u64::from).collect()
-        }
+            process_u64(keys.into_iter().map(u64::from).collect())
+        },
         DataType::UINT64 => {
             let mut keys = vec![0; num_items];
             reader.read_u64_into::<LittleEndian>(&mut keys).unwrap();
-            keys
+            process_u64(keys)
+        },
+        DataType::FLOAT64 => {
+            let mut keys = vec![0.0; num_items];
+            reader.read_f64_into::<LittleEndian>(&mut keys).unwrap();
+            process_f64(keys)
         }
     };
+}
 
+fn process_u64(keys: Vec<u64>) -> (usize, RMITrainingData) {
     let has_duplicates = has_duplicates(&keys);
     let mut init_data: Vec<(u64, usize)> = Vec::with_capacity(keys.len());
 
@@ -55,16 +61,17 @@ pub fn load_data(filepath: &str,
     }
 
     let orig_size = init_data.len();
-
-    // it is critical that we downsample AFTER assigning indexes and
-    // not before.
-    if downsample > 1 {
-        trace!("Downsampling by a factor of {}", downsample);
-        init_data = init_data.into_iter().step_by(downsample).collect();
-        info!("Downsampled from {} to {}", orig_size, init_data.len());
-    }
-
     return (orig_size, RMITrainingData::new(Box::new(init_data)));
+}
+    
+fn process_f64(keys: Vec<f64>) -> (usize, RMITrainingData) {
+    // assume float datasets have no (meaningful) duplicate keys
+    let init_data: Vec<(f64, usize)> = keys.into_iter()
+        .enumerate()
+        .map(|(idx, k)| (k, idx))
+        .collect();
+
+    return (init_data.len(), RMITrainingData::new(Box::new(init_data)));
 }
 
 fn has_duplicates<T: PartialEq>(data: &[T]) -> bool {

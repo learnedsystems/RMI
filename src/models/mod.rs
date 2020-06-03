@@ -40,10 +40,21 @@ use std::sync::Arc;
 use std::io::Write;
 use byteorder::{WriteBytesExt, LittleEndian};
 
+pub enum KeyType {
+    U64, F64
+}
 
 pub trait RMITrainingDataIteratorProvider: Send + Sync {
     fn len(&self) -> usize;
-    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (u64, usize)> + '_>;
+    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (u64, usize)> + '_> {
+        panic!("This CDF iterator does not support u64 keys.");
+    }
+    
+    fn cdf_iter_float_keys(&self) -> Box<dyn Iterator<Item = (f64, usize)> + '_> {
+        panic!("This CDF iterator does not support f64 keys.");
+    }
+
+    fn key_type(&self) -> KeyType;
 }
 
 impl RMITrainingDataIteratorProvider for Vec<(u64, usize)> {
@@ -54,6 +65,20 @@ impl RMITrainingDataIteratorProvider for Vec<(u64, usize)> {
     fn cdf_iter(&self) -> Box<dyn Iterator<Item = (u64, usize)> + '_> {
         return Box::new(self.iter().cloned());
     }
+
+    fn key_type(&self) -> KeyType { return KeyType::U64; }
+}
+
+impl RMITrainingDataIteratorProvider for Vec<(f64, usize)> {
+    fn len(&self) -> usize {
+        return Vec::len(&self);
+    }
+
+    fn cdf_iter_float_keys(&self) -> Box<dyn Iterator<Item = (f64, usize)> + '_> {
+        return Box::new(self.iter().cloned());
+    }
+
+    fn key_type(&self) -> KeyType { return KeyType::F64; }
 }
 
 
@@ -106,24 +131,51 @@ impl RMITrainingData {
             .next().unwrap();
     }
 
-    pub fn iter_float_float(&self) -> impl Iterator<Item = (f64, f64)> + '_ {
+    pub fn iter_float_float(&self) -> Box<dyn Iterator<Item = (f64, f64)> + '_> {
         let sf = self.scale;
-        return self.iterable.cdf_iter()
-            .map(move |(key, offset)| (key as f64, offset as f64 * sf));
+        match self.iterable.key_type() {
+            KeyType::U64 => {
+                Box::new(self.iterable.cdf_iter()
+                         .map(move |(key, offset)| (key as f64, offset as f64 * sf)))
+            }
+            KeyType::F64 => {
+                Box::new(self.iterable.cdf_iter_float_keys()
+                         .map(move |(key, offset)| (key, offset as f64 * sf)))
+            }
+        }
     }
 
-    pub fn iter_uint_usize(&self) -> impl Iterator<Item = (u64, usize)> + '_ {
+    pub fn iter_uint_usize(&self) -> Box<dyn Iterator<Item = (u64, usize)> + '_> {
         let sf = self.scale;
-        return self.iterable.cdf_iter()
-            .map(move |(key, offset)| (key, (offset as f64 * sf) as usize));
-        
+        match self.iterable.key_type() {
+            KeyType::U64 => {
+                Box::new(self.iterable.cdf_iter()
+                         .map(move |(key, offset)|
+                              (key, (offset as f64 * sf) as usize)))
+            }
+            KeyType::F64 => {
+                Box::new(self.iterable.cdf_iter_float_keys()
+                         .map(move |(key, offset)|
+                              (key as u64, (offset as f64 * sf) as usize)))
+            }
+        }
     }
 
-    pub fn iter_uint_uint(&self) -> impl Iterator<Item = (u64, u64)> + '_ {
+    pub fn iter_uint_uint(&self) -> Box<dyn Iterator<Item = (u64, u64)> + '_> {
         let sf = self.scale;
-        return self.iterable.cdf_iter()
-            .map(move |(key, offset)| (key, (offset as f64 * sf) as u64));
-        
+        match self.iterable.key_type() {
+            KeyType::U64 => {
+                Box::new(self.iterable.cdf_iter()
+                         .map(move |(key, offset)|
+                              (key, (offset as f64 * sf) as u64)))
+            }
+            KeyType::F64 => {
+                Box::new(self.iterable.cdf_iter_float_keys()
+                         .map(move |(key, offset)|
+                              (key as u64, (offset as f64 * sf) as u64)))
+           
+            }
+        }
     }
 
     // Code adapted from superslice,
