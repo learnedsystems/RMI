@@ -81,6 +81,37 @@ impl RMITrainingDataIteratorProvider for Vec<(f64, usize)> {
     fn key_type(&self) -> KeyType { return KeyType::F64; }
 }
 
+impl RMITrainingDataIteratorProvider for Vec<(ModelInput, usize)> {
+    fn len(&self) -> usize {
+        return Vec::len(&self);
+    }
+
+    fn cdf_iter_float_keys(&self) -> Box<dyn Iterator<Item = (f64, usize)> + '_> {
+        if let KeyType::U64 = self.key_type() {
+            panic!("Iter float keys called on provider with int model inputs");
+        }
+
+        return Box::new(self.iter()
+                        .map(|(mi, offset)| (mi.as_float(), *offset)));
+    }
+
+    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (u64, usize)> + '_> {
+        if let KeyType::F64 = self.key_type() {
+            panic!("Iter keys called on provider with float model inputs");
+        }
+
+        return Box::new(self.iter()
+                        .map(|(mi, offset)| (mi.as_int(), *offset)));
+    }
+
+    fn key_type(&self) -> KeyType {
+        match self.first().unwrap().0 {
+            ModelInput::Int(_) => KeyType::U64,
+            ModelInput::Float(_) => KeyType::F64
+        }
+    }
+}
+
 
 pub struct RMITrainingData {
     iterable: Arc<Box<dyn RMITrainingDataIteratorProvider>>,
@@ -112,8 +143,8 @@ impl RMITrainingData {
             .next().unwrap();
     }
 
-    pub fn get_key(&self, idx: usize) -> u64 {
-        return self.iter_uint_usize()
+    pub fn get_key(&self, idx: usize) -> ModelInput {
+        return self.iter_model_input()
             .skip(idx)
             .next().unwrap().0;
     }
@@ -129,6 +160,22 @@ impl RMITrainingData {
         return self.iter_uint_usize()
             .skip(idx)
             .next().unwrap();
+    }
+
+    pub fn iter_model_input(&self) -> Box<dyn Iterator<Item = (ModelInput, usize)> + '_> {
+        let sf = self.scale;
+        match self.iterable.key_type() {
+            KeyType::U64 => {
+                Box::new(self.iterable.cdf_iter()
+                         .map(move |(key, offset)|
+                              (key.into(), (offset as f64 * sf) as usize)))
+            }
+            KeyType::F64 => {
+                Box::new(self.iterable.cdf_iter_float_keys()
+                         .map(move |(key, offset)|
+                              (key.into(), (offset as f64 * sf) as usize)))
+            }
+        }
     }
 
     pub fn iter_float_float(&self) -> Box<dyn Iterator<Item = (f64, f64)> + '_> {
@@ -178,6 +225,10 @@ impl RMITrainingData {
         }
     }
 
+    pub fn key_type(&self) -> KeyType {
+        return self.iterable.key_type();
+    }
+
     // Code adapted from superslice,
     // https://docs.rs/superslice/1.0.0/src/superslice/lib.rs.html
     // which was copyright 2017 Alkis Evlogimenos under the Apache License.
@@ -215,10 +266,33 @@ impl RMITrainingDataIteratorProvider for RMITrainingDataIteratorProviderWrapper 
 }*/
 
 
+#[derive(Clone, Copy)]
 pub enum ModelInput {
     Int(u64),
     Float(f64),
 }
+
+impl PartialEq for ModelInput {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            ModelInput::Int(x) => {
+                match other {
+                    ModelInput::Int(y) => x == y,
+                    ModelInput::Float(_) => false
+                }
+            }
+
+            ModelInput::Float(x) => {
+                match other {
+                    ModelInput::Int(_) => false,
+                    ModelInput::Float(y) => x == y // exact equality is intentional
+                }
+            }
+        }
+    }
+}
+
+impl Eq for ModelInput { }
 
 impl ModelInput {
     fn as_float(&self) -> f64 {
@@ -232,6 +306,27 @@ impl ModelInput {
         return match self {
             ModelInput::Int(x) => *x,
             ModelInput::Float(x) => *x as u64,
+        };
+    }
+
+    pub fn max_value(&self) -> ModelInput {
+        return match self {
+            ModelInput::Int(_) => std::u64::MAX.into(),
+            ModelInput::Float(_) => std::f64::MAX.into()
+        };
+    }
+
+    pub fn minus_epsilon(&self) -> ModelInput {
+        return match self {
+            ModelInput::Int(x) => (x - 1).into(),
+            ModelInput::Float(x) => (x - std::f64::EPSILON).into()
+        };
+    }
+
+    pub fn plus_epsilon(&self) -> ModelInput {
+        return match self {
+            ModelInput::Int(x) => (x + 1).into(),
+            ModelInput::Float(x) => (x + std::f64::EPSILON).into()
         };
     }
 }

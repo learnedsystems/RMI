@@ -32,12 +32,12 @@ fn build_models_from(data: &RMITrainingData,
     let mut second_layer_data = Vec::with_capacity((end_idx - start_idx) / num_models as usize);
     let mut last_target = first_model_idx;
            
-    let bounded_it = data.iter_uint_usize()
+    let bounded_it = data.iter_model_input()
         .skip(start_idx)
         .take(end_idx - start_idx);
         
     for (x, y) in bounded_it {
-        let model_pred = top_model.predict_to_int(x.into()) as usize;
+        let model_pred = top_model.predict_to_int(x) as usize;
         assert!(top_model.needs_bounds_check() || model_pred < first_model_idx + num_models,
                 "Top model gave an index of {} which is out of bounds of {}. \
                 Subset range: {} to {}",
@@ -54,7 +54,7 @@ fn build_models_from(data: &RMITrainingData,
             let last_item = second_layer_data.last().copied();
             second_layer_data.push((x, y));
             
-            let container = RMITrainingData::from_vec(second_layer_data);
+            let container = RMITrainingData::new(Box::new(second_layer_data));
             let leaf_model = train_model(model_type, &container);
             leaf_models.push(leaf_model);
             
@@ -81,7 +81,7 @@ fn build_models_from(data: &RMITrainingData,
 
     // train the last remaining model
     assert!(! second_layer_data.is_empty());
-    let container = RMITrainingData::from_vec(second_layer_data);
+    let container = RMITrainingData::new(Box::new(second_layer_data));
     let leaf_model = train_model(model_type, &container);
     leaf_models.push(leaf_model);
     assert!(leaf_models.len() <= num_models);
@@ -180,7 +180,7 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
 
     info!("Fixing empty models...");
     // replace any empty model with a model that returns the correct constant
-    // (for UB predictions), if the underlying model supports it.
+    // (for LB predictions), if the underlying model supports it.
     let mut could_not_replace = false;
     for idx in 0..(num_leaf_models as usize)-1 {
         assert_eq!(lb_corrections.first_key(idx).is_none(),
@@ -189,7 +189,7 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         if lb_corrections.last_key(idx).is_none() {
             // model is empty!
             let upper_bound = lb_corrections.next_index(idx);
-            if !leaf_models[idx].set_to_constant_model(upper_bound) {
+            if !leaf_models[idx].set_to_constant_model(upper_bound as u64) {
                 could_not_replace = true;
             }
         }
@@ -204,12 +204,12 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
     info!("Computing last level errors...");
     // evaluate model, compute last level errors
     let mut last_layer_max_l1s = vec![(0, 0) ; num_leaf_models as usize];
-    for (x, y) in md_container.iter_uint_uint() {
-        let leaf_idx = top_model.predict_to_int(x.into());
+    for (x, y) in md_container.iter_model_input() {
+        let leaf_idx = top_model.predict_to_int(x);
         let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
         
-        let pred = leaf_models[target].predict_to_int(x.into());
-        let err = error_between(pred, y, md_container.len() as u64);
+        let pred = leaf_models[target].predict_to_int(x);
+        let err = error_between(pred, y as u64, md_container.len() as u64);
 
         let cur_val = last_layer_max_l1s[target];
         last_layer_max_l1s[target] = (cur_val.0 + 1, u64::max(err, cur_val.1));
@@ -227,8 +227,8 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         let curr_err = last_layer_max_l1s[leaf_idx].1;
         let upper_error = {
             let (idx_of_next, key_of_next) = lb_corrections.next(leaf_idx);
-            let pred = leaf_models[leaf_idx].predict_to_int((key_of_next - 1).into());
-            error_between(pred, idx_of_next + 1, md_container.len() as u64)
+            let pred = leaf_models[leaf_idx].predict_to_int(key_of_next.minus_epsilon());
+            error_between(pred, idx_of_next as u64 + 1, md_container.len() as u64)
         };
         
         let lower_error = {
@@ -237,8 +237,8 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
             let prev_idx = if leaf_idx == 0 { 0 } else { leaf_idx - 1 };
             let first_idx = lb_corrections.next_index(prev_idx);
 
-            let pred = leaf_models[leaf_idx].predict_to_int((first_key_before + 1).into());
-            error_between(pred, first_idx, md_container.len() as u64)
+            let pred = leaf_models[leaf_idx].predict_to_int(first_key_before.plus_epsilon());
+            error_between(pred, first_idx as u64, md_container.len() as u64)
         };
           
             
