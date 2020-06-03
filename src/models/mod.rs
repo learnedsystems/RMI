@@ -134,9 +134,9 @@ impl RMITrainingData {
 
     pub fn iter(&self) -> impl Iterator<Item = (ModelInput, usize)> + '_ {
         let sf = self.scale;
-        return Box::new(self.iterable.cdf_iter()
-                        .map(move |(key, offset)|
-                             (key.into(), (offset as f64 * sf) as usize)));
+        return self.iterable.cdf_iter()
+            .map(move |(key, offset)|
+                 (key.into(), (offset as f64 * sf) as usize));
     }
 
     pub fn key_type(&self) -> KeyType {
