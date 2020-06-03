@@ -17,6 +17,7 @@ mod optimizer;
 
 use load::{load_data, DataType};
 use train::train;
+use models::KeyType;
 
 use json::*;
 use log::*;
@@ -107,11 +108,13 @@ fn main() {
     
     info!("Reading {}...", fp);
 
+    let mut key_type = KeyType::U64;
     let (num_rows, mut data) = if fp.contains("uint64") {
         load_data(&fp, DataType::UINT64)
     } else if fp.contains("uint32") {
         load_data(&fp, DataType::UINT32)
     } else if fp.contains("f64") {
+        key_type = KeyType::F64;
         load_data(&fp, DataType::FLOAT64)
     } else {
         panic!("Data file must contain uint64, uint32, or f64.");
@@ -208,7 +211,8 @@ fn main() {
                             &nmspc,
                             trained_model,
                             build_time,
-                            data_dir).unwrap();
+                            data_dir,
+                            key_type).unwrap();
                         
                     }
                     
@@ -308,7 +312,8 @@ fn main() {
                 &namespace,
                 trained_model,
                 build_time,
-                data_dir).unwrap();
+                data_dir,
+                key_type).unwrap();
         } else {
             trace!("Skipping code generation due to CLI flag");
         }

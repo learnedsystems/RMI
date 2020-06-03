@@ -363,6 +363,14 @@ macro_rules! model_index_from_output {
                     format!("ipred")
                 }
             }
+            ModelDataType::Int128 => {
+                if $needs_check {
+                    format!("(i128pred > {0} - 1 ? {0} - 1 : i128pred)", $bound)
+                } else {
+                    format!("i128pred")
+                }
+            }
+
         }
     };
 }
@@ -394,6 +402,7 @@ fn generate_code<T: Write>(
     last_layer_errors: Option<Vec<u64>>,
     storage: StorageConf,
     build_time: u128,
+    key_type: KeyType
 ) -> Result<(), std::io::Error> {
     // construct the code for the model parameters.
     let mut layer_params: Vec<LayerParams> = rmi
@@ -554,22 +563,23 @@ inline size_t FCLAMP(double inp, double bound) {{
     )?;
 
     let lookup_sig = if report_last_layer_errors {
-        "uint64_t lookup(uint64_t key, size_t* err)"
+        format!("uint64_t lookup({} key, size_t* err)", key_type.c_type())
     } else {
-        "uint64_t lookup(uint64_t key)"
+        format!("uint64_t lookup({} key)", key_type.c_type())
     };
     writeln!(code_output, "{} {{", lookup_sig)?;
 
-    // determine if we have any layers with float (fpred) or int (ipred) outputs
     let mut needed_vars = HashSet::new();
     if rmi.len() > 1 {
         needed_vars.insert("size_t modelIndex;");
     }
 
+    // determine if we have any layers with float (fpred) or int (ipred) outputs
     for layer in rmi.iter() {
         match layer[0].output_type() {
             ModelDataType::Int => needed_vars.insert("uint64_t ipred;"),
             ModelDataType::Float => needed_vars.insert("double fpred;"),
+            ModelDataType::Int128 => needed_vars.insert("uint128_t i128pred;"),
         };
     }
 
@@ -580,7 +590,7 @@ inline size_t FCLAMP(double inp, double bound) {{
     let model_size_bytes = rmi_size(&rmi, report_last_layer_errors);
     info!("Generated model size: {:?} ({} bytes)", ByteSize(model_size_bytes), model_size_bytes);
 
-    let mut last_model_output = ModelDataType::Int;
+    let mut last_model_output = key_type.to_model_data_type();
     let mut needs_bounds_check = true;
 
     for (layer_idx, layer) in rmi.into_iter().enumerate() {
@@ -592,6 +602,7 @@ inline size_t FCLAMP(double inp, double bound) {{
         let var_name = match current_model_output {
             ModelDataType::Int => "ipred",
             ModelDataType::Float => "fpred",
+            ModelDataType::Int128 => "i128pred"
         };
 
         let num_parameters = layer[0].params().len();
@@ -686,7 +697,8 @@ inline size_t FCLAMP(double inp, double bound) {{
 pub fn output_rmi(namespace: &str,
                   trained_model: TrainedRMI,
                   build_time: u128,
-                  data_dir: &str) -> Result<(), std::io::Error> {
+                  data_dir: &str,
+                  key_type: KeyType) -> Result<(), std::io::Error> {
     
     let f1 = File::create(format!("{}.cpp", namespace)).expect("Could not write RMI CPP file");
     let mut bw1 = BufWriter::new(f1);
@@ -711,6 +723,7 @@ pub fn output_rmi(namespace: &str,
         lle,
         conf,
         build_time,
+        key_type
     );
         
     

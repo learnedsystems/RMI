@@ -40,8 +40,28 @@ use std::sync::Arc;
 use std::io::Write;
 use byteorder::{WriteBytesExt, LittleEndian};
 
+#[derive(Clone, Copy)]
 pub enum KeyType {
-    U64, F64
+    U64, F64, U128
+}
+
+impl KeyType {
+    pub fn c_type(&self) -> &'static str {
+        match self {
+            KeyType::U64 => "uint64_t",
+            KeyType::F64 => "double",
+            KeyType::U128 => "uint128_t"
+        }
+    }
+
+    pub fn to_model_data_type(self) -> ModelDataType {
+        match self {
+            KeyType::U64 => ModelDataType::Int,
+            KeyType::U128 => ModelDataType::Int128,
+            KeyType::F64 => ModelDataType::Float
+            
+        }
+    }
 }
 
 pub trait RMITrainingDataIteratorProvider: Send + Sync {
@@ -259,6 +279,7 @@ impl From<f64> for ModelInput {
 
 pub enum ModelDataType {
     Int,
+    Int128,
     Float,
 }
 
@@ -266,6 +287,7 @@ impl ModelDataType {
     pub fn c_type(&self) -> &'static str {
         match self {
             ModelDataType::Int => "uint64_t",
+            ModelDataType::Int128 => "uint128_t",
             ModelDataType::Float => "double",
         }
     }
