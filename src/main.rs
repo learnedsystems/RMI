@@ -76,11 +76,14 @@ fn main() {
              .short("d")
              .value_name("dir")
              .help("exports parameters to files in this directory instead of embedding them"))
+        .arg(Arg::with_name("no-errors")
+             .long("no-errors")
+             .help("do not save last-level errors, and modify the RMI function signature"))
         .arg(Arg::with_name("threads")
              .long("threads")
              .short("t")
              .value_name("count")
-             .help("number of threads to use for training, default = 4"))
+             .help("number of threads to use for optimization, default = 4"))
         .arg(Arg::with_name("disable-parallel-training")
              .long("disable-parallel-training")
              .help("disables training multiple RMIs in parallel"))
@@ -145,6 +148,14 @@ fn main() {
         let mut bw = BufWriter::new(f);
         grid_specs_json.write(&mut bw).unwrap();
         return;
+    }
+
+    // if we aren't optimizing, we should make sure the RMI data directory exists.
+    if !Path::new(data_dir).exists() {
+        info!("The RMI data directory specified {} does not exist. Creating it.",
+              data_dir);
+        std::fs::create_dir_all(data_dir)
+            .expect("The RMI data directory did not exist, and it could not be created.");
     }
     
     if let Some(param_grid) = matches.value_of("param-grid").map(|x| x.to_string()) {
@@ -212,7 +223,8 @@ fn main() {
                             trained_model,
                             build_time,
                             data_dir,
-                            key_type).unwrap();
+                            key_type,
+                            true).unwrap();
                         
                     }
                     
@@ -257,6 +269,8 @@ fn main() {
             .duration_since(start_time)
             .map(|d| d.as_nanos())
             .unwrap_or(std::u128::MAX);
+
+        let no_errors = matches.is_present("no-errors");
         info!("Model build time: {} ms", build_time / 1_000_000);
 
         info!(
@@ -313,7 +327,8 @@ fn main() {
                 trained_model,
                 build_time,
                 data_dir,
-                key_type).unwrap();
+                key_type,
+                !no_errors).unwrap();
         } else {
             trace!("Skipping code generation due to CLI flag");
         }

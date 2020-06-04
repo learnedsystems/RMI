@@ -400,7 +400,7 @@ fn generate_code<T: Write>(
     total_rows: usize,
     rmi: Vec<Vec<Box<dyn Model>>>,
     last_layer_errors: Option<Vec<u64>>,
-    storage: StorageConf,
+    data_dir: &str,
     build_time: u128,
     key_type: KeyType
 ) -> Result<(), std::io::Error> {
@@ -442,54 +442,45 @@ fn generate_code<T: Write>(
     writeln!(data_output, "namespace {} {{", namespace)?;    
     
     let mut read_code = Vec::new();
-    match &storage {
-        // embed the data directly inside of the header files
-        StorageConf::Embed => {
-            for lp in layer_params.iter() {
-                lp.to_code(data_output)?;
-            }
-        },
-
-        // store the data on disk, add code to load it
-        StorageConf::Disk(path) => {
-            read_code.push("bool load(char const* dataPath) {".to_string());
+    read_code.push("bool load(char const* dataPath) {".to_string());
             
-            for lp in layer_params.iter() {
-                match lp {
-                    // constants are still put directly in the header 
-                    LayerParams::Constant(_idx, _) => lp.to_code(data_output)?,
-                    
-                    LayerParams::Array(idx, _, _) |
-                    LayerParams::MixedArray(idx, _, _) => {
-                        let data_path = Path::new(&path).join(format!("{}_{}", namespace, array_name!(idx)));
-                        let f = File::create(data_path).expect("Could not write data file -- does the RMI data directory exist?");
-                        let mut bw = BufWriter::new(f);
-
-                        lp.write_to(&mut bw)?; // write to data file
-                        lp.to_decl(data_output)?; // write to source code
-
-                        read_code.push("  {".to_string());
-                        read_code.push(format!("    std::ifstream infile(std::filesystem::path(dataPath) / \"{ns}_{fn}\", std::ios::in | std::ios::binary);",
-                                               ns=namespace, fn=array_name!(idx)));
-                        read_code.push("    if (!infile.good()) return false;".to_string());
-                        if lp.requires_malloc() {
-                            read_code.push(format!("    {} = ({}*) malloc({});",
-                                                   array_name!(idx), lp.pointer_type(), lp.size()));
-                            read_code.push(format!("    if ({} == NULL) return false;",
-                                                   array_name!(idx)));
-                        }
-                        read_code.push(format!("    infile.read((char*){fn}, {size});",
-                                               fn=array_name!(idx), size=lp.size()));
-                        read_code.push("    if (!infile.good()) return false;".to_string());
-                        read_code.push("  }".to_string());
-                    }
+    for lp in layer_params.iter() {
+        match lp {
+            // constants are put directly in the header 
+            LayerParams::Constant(_idx, _) => lp.to_code(data_output)?,
+            
+            LayerParams::Array(idx, _, _) |
+            LayerParams::MixedArray(idx, _, _) => {
+                let data_path = Path::new(&data_dir)
+                    .join(format!("{}_{}", namespace, array_name!(idx)));
+                let f = File::create(data_path)
+                    .expect("Could not write data file to RMI directory");
+                let mut bw = BufWriter::new(f);
+                
+                lp.write_to(&mut bw)?; // write to data file
+                lp.to_decl(data_output)?; // write to source code
+                
+                read_code.push("  {".to_string());
+                read_code.push(format!("    std::ifstream infile(std::filesystem::path(dataPath) / \"{ns}_{fn}\", std::ios::in | std::ios::binary);",
+                                       ns=namespace, fn=array_name!(idx)));
+                read_code.push("    if (!infile.good()) return false;".to_string());
+                if lp.requires_malloc() {
+                    read_code.push(format!("    {} = ({}*) malloc({});",
+                                           array_name!(idx), lp.pointer_type(), lp.size()));
+                    read_code.push(format!("    if ({} == NULL) return false;",
+                                           array_name!(idx)));
                 }
+                read_code.push(format!("    infile.read((char*){fn}, {size});",
+                                       fn=array_name!(idx), size=lp.size()));
+                read_code.push("    if (!infile.good()) return false;".to_string());
+                read_code.push("  }".to_string());
             }
-            read_code.push("  return true;".to_string());
-            read_code.push("}".to_string());
-
         }
-    };
+    }
+    read_code.push("  return true;".to_string());
+    read_code.push("}".to_string());
+
+
 
     let mut free_code = Vec::new();
     free_code.push("void cleanup() {".to_string());
@@ -502,6 +493,7 @@ fn generate_code<T: Write>(
         }
         panic!();
     }
+    
     free_code.push("}".to_string());
 
     writeln!(data_output, "}} // namespace")?;
@@ -662,10 +654,7 @@ inline size_t FCLAMP(double inp, double bound) {{
     writeln!(header_output, "#include <cstdint>")?;
     writeln!(header_output, "namespace {} {{", namespace)?;
 
-    if let StorageConf::Disk(_) = storage {
-        writeln!(header_output, "bool load(char const* dataPath);")?;
-    }
-
+    writeln!(header_output, "bool load(char const* dataPath);")?;
     writeln!(header_output, "void cleanup();")?;
 
     
@@ -698,7 +687,8 @@ pub fn output_rmi(namespace: &str,
                   trained_model: TrainedRMI,
                   build_time: u128,
                   data_dir: &str,
-                  key_type: KeyType) -> Result<(), std::io::Error> {
+                  key_type: KeyType,
+                  include_errors: bool) -> Result<(), std::io::Error> {
     
     let f1 = File::create(format!("{}.cpp", namespace)).expect("Could not write RMI CPP file");
     let mut bw1 = BufWriter::new(f1);
@@ -710,9 +700,12 @@ pub fn output_rmi(namespace: &str,
     let f3 = File::create(format!("{}.h", namespace)).expect("Could not write RMI header file");
     let mut bw3 = BufWriter::new(f3);
     
-    let lle = Some(trained_model.last_layer_max_l1s);
-    let conf = StorageConf::Disk(String::from(data_dir));
-    
+    let lle = if include_errors {
+        Some(trained_model.last_layer_max_l1s)
+    } else {
+        None
+    };
+        
     return generate_code(
         &mut bw1,
         &mut bw2,
@@ -721,7 +714,7 @@ pub fn output_rmi(namespace: &str,
         trained_model.num_rows,
         trained_model.rmi,
         lle,
-        conf,
+        data_dir,
         build_time,
         key_type
     );
