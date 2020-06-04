@@ -75,7 +75,7 @@ fn main() {
              .long("data-path")
              .short("d")
              .value_name("dir")
-             .help("exports parameters to files in this directory instead of embedding them"))
+             .help("exports parameters to files in this directory (default: rmi_data)"))
         .arg(Arg::with_name("no-errors")
              .long("no-errors")
              .help("do not save last-level errors, and modify the RMI function signature"))
