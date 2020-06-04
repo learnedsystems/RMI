@@ -31,7 +31,7 @@ If the input file contains 32-bit integers, the filename must end with `uint32`.
 In addition to the input dataset, you must also provide a model structure. For example, to build a 2-layer RMI on the data file `books_200M_uint32` (available from [the Harvard Dataverse](https://dataverse.harvard.edu/file.xhtml?persistentId=doi:10.7910/DVN/JGVF9A/MZZUP2&version=4.0)) with a branching factor of 100, we could run:
 
 ```
-cargo run --release -- books_200M_uint32 my_first_rmi linear,linear 100 -d rmi_data/ -e
+cargo run --release -- books_200M_uint32 my_first_rmi linear,linear 100
 ```
 
 This command would produce C/C++ source files in the current directory. The C/C++ sources contain a few publicly-exposed fields:
@@ -53,10 +53,10 @@ namespace wiki {
 * The `RMI_SIZE` constant represents the size of the constructed model in bytes. 
 * The `BUILD_TIME_NS` field records how long it took to build the RMI, in nanoseconds. 
 * The `NAME` field is a constant you specify (and always matches the namespace name). 
-* The `load` function will need to be called before any calls to `lookup`. The `dataPath` parameter must the path to the directory containing the RMI data (`rmi_data` in this example).
+* The `load` function will need to be called before any calls to `lookup`. The `dataPath` parameter must the path to the directory containing the RMI data (`rmi_data` in this example / the default).
 * The `lookup` function takes in an unsigned, 64-bit integer key and produces an estimate of the offset. The `err` parameter will be populated with the maximum error from the RMI's prediction to the target key. This lookup error can be used to perform a bounded binary search. If the error of the trained RMI is low enough, linear search may give better performance.
 
-If you run the compiler without the `-e` flag, the API will change to no longer report the maximum possible error of each lookup, saving some space.
+If you run the compiler with the `--no-errors` flag, the API will change to no longer report the maximum possible error of each lookup, saving some space.
 
 ```c++
 uint64_t lookup(uint64_t key);
@@ -79,7 +79,13 @@ Currently, the following types of RMI layers are supported:
 * `plr`, performs piecewise linear regression with a fixed error bound (64)
 * `pgm`, constructs a [piecewise geometric model (PGM) index](https://arxiv.org/abs/1910.06169)
 
-Tuning an RMI is critical to getting good performance. A good place to start is a `cubic` layer followed by a large linear layer, for example: `cubic,linear 262144`. 
+Tuning an RMI is critical to getting good performance. A good place to start is a `cubic` layer followed by a large linear layer, for example: `cubic,linear 262144`. For automatic tuning, try the RMI optimizer using the `--optimize` flag:
+
+```
+cargo run --release -- --optimize optimizer_out.json books_200M_uint64
+```
+
+By default, the optimizer will use 4 threads. If you have a big machine, consider increasing this with the `--threads` option.
 
 
 This work is freely available under the terms of the MIT license.
