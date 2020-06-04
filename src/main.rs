@@ -9,15 +9,13 @@
 
 #![allow(clippy::needless_return)]
 
-mod codegen;
 mod load;
-mod models;
-mod train;
-mod optimizer;
+
 
 use load::{load_data, DataType};
-use train::train;
-use models::KeyType;
+use rmi_lib::train;
+use rmi_lib::KeyType;
+use rmi_lib::optimizer;
 
 use json::*;
 use log::*;
@@ -197,8 +195,8 @@ fn main() {
                         .map(|d| d.as_nanos())
                         .unwrap_or(std::u128::MAX);
                     
-                    let size_bs = codegen::rmi_size(&trained_model.rmi, true);
-                    let size_ls = codegen::rmi_size(&trained_model.rmi, false);
+                    let size_bs = rmi_lib::rmi_size(&trained_model.rmi, true);
+                    let size_ls = rmi_lib::rmi_size(&trained_model.rmi, false);
                     
                     let result_obj = object! {
                         "layers" => models.clone(),
@@ -218,7 +216,7 @@ fn main() {
                     };
                     
                     if let Some(nmspc) = namespace {
-                        codegen::output_rmi(
+                        rmi_lib::output_rmi(
                             &nmspc,
                             trained_model,
                             build_time,
@@ -322,7 +320,7 @@ fn main() {
         }
         
         if !matches.is_present("no-code") {
-            codegen::output_rmi(
+            rmi_lib::output_rmi(
                 &namespace,
                 trained_model,
                 build_time,

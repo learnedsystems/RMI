@@ -21,11 +21,6 @@ use std::path::Path;
 use std::fmt;
 
 
-enum StorageConf {
-    Embed,
-    Disk(String)
-}
-
 enum LayerParams {
     Constant(usize, Vec<ModelParam>),
     Array(usize, usize, Vec<ModelParam>),

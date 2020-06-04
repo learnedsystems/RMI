@@ -159,10 +159,6 @@ impl RMITrainingData {
                  (key.into(), (offset as f64 * sf) as usize));
     }
 
-    pub fn key_type(&self) -> KeyType {
-        return self.iterable.key_type();
-    }
-
     // Code adapted from superslice,
     // https://docs.rs/superslice/1.0.0/src/superslice/lib.rs.html
     // which was copyright 2017 Alkis Evlogimenos under the Apache License.

@@ -7,7 +7,7 @@
  
  
 
-use crate::models::RMITrainingData;
+use rmi_lib::RMITrainingData;
 use byteorder::{LittleEndian, ReadBytesExt};
 use log::debug;
 use std::fs::File;
