@@ -23,7 +23,9 @@ fn build_models_from(data: &RMITrainingData,
                      first_model_idx: usize,
                      num_models: usize) -> Vec<Box<dyn Model>> {
 
-    assert!(end_idx > start_idx);
+    assert!(end_idx > start_idx,
+            "start index was {} but end index was {}",
+            start_idx, end_idx);
     assert!(end_idx <= data.len());
     assert!(start_idx <= data.len());
 
@@ -119,7 +121,6 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         trace!("Top model was monotonic.");
     }
 
-    
     info!("Training second-level {} model layer (num models = {})",
           layer2_model, num_leaf_models);
     md_container.set_scale(1.0);
@@ -159,11 +160,11 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
 
         let (mut hf1, mut hf2)
             = rayon::join(|| build_models_from(&md_container, &top_model, layer2_model,
-                                               0, split_idx - 1,
+                                               0, split_idx,
                                                0,
                                                first_half_models),
                           || build_models_from(&md_container, &top_model, layer2_model,
-                                               split_idx, md_container.len(),
+                                               split_idx + 1, md_container.len(),
                                                split_idx_target,
                                                second_half_models));
 
@@ -282,7 +283,8 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         .map(|(_n, err)| err).collect();
     
     return TrainedRMI {
-        num_rows: md_container.len(),
+        num_rmi_rows: md_container.len(),
+        num_data_rows: md_container.len(),
         model_avg_error,
         model_avg_l2_error,
         model_avg_log2_error,
@@ -292,7 +294,8 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         last_layer_max_l1s: final_errors,
         rmi: vec![vec![top_model], leaf_models],
         models: format!("{},{}", layer1_model, layer2_model),
-        branching_factor: num_leaf_models
+        branching_factor: num_leaf_models,
+        cache_fix: None
     };
 
 }

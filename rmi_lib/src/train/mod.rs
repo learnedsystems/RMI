@@ -7,13 +7,15 @@
  
 
 use crate::models::*;
+use crate::cache_fix::cache_fix;
 
 mod two_layer;
 //mod multi_layer;
 mod lower_bound_correction;
 
 pub struct TrainedRMI {
-    pub num_rows: usize,
+    pub num_rmi_rows: usize,
+    pub num_data_rows: usize,
     pub model_avg_error: f64,
     pub model_avg_l2_error: f64,
     pub model_avg_log2_error: f64,
@@ -23,7 +25,8 @@ pub struct TrainedRMI {
     pub last_layer_max_l1s: Vec<u64>,
     pub rmi: Vec<Vec<Box<dyn Model>>>,
     pub models: String,
-    pub branching_factor: u64
+    pub branching_factor: u64,
+    pub cache_fix: Option<(usize, Vec<(ModelInput, usize)>)>
 }
 
 impl TrainedRMI {
@@ -128,3 +131,42 @@ pub fn train(data: &RMITrainingData,
     //return multi_layer::train_multi_layer(data, &model_list, last_model, branch_factor);
     panic!(); // TODO
 }
+
+pub fn train_bounded(data: &RMITrainingData,
+                     model_spec: &str,
+                     branch_factor: u64,
+                     line_size: usize) -> TrainedRMI {
+
+    // first, transform our data into error-bounded spline points
+    let spline = cache_fix(data, line_size);
+    std::mem::drop(data);
+
+    // reindex the spline points so we can build an RMI on top
+    let reindexed_splines: Vec<(ModelInput, usize)> = spline.iter()
+        .enumerate()
+        .map(|(idx, (key, _old_offset))| (*key, idx))
+        .collect();
+    
+    // construct new training data from our spline points
+    let mut new_data = RMITrainingData::new(Box::new(reindexed_splines));
+    
+    let (model_list, last_model): (Vec<String>, String) = {
+        let mut all_models: Vec<String> = model_spec.split(',').map(String::from).collect();
+        validate(&all_models);
+        let last = all_models.pop().unwrap();
+        (all_models, last)
+    };
+
+    if model_list.len() == 1 {
+        let mut res = two_layer::train_two_layer(&mut new_data, &model_list[0],
+                                                 &last_model, branch_factor);
+        res.cache_fix = Some((line_size, spline));
+        res.num_data_rows = data.len();
+        return res;
+    }
+
+    // it is not a simple, two layer rmi
+    //return multi_layer::train_multi_layer(data, &model_list, last_model, branch_factor);
+    panic!(); // TODO
+}
+

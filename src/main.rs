@@ -13,7 +13,7 @@ mod load;
 
 
 use load::{load_data, DataType};
-use rmi_lib::train;
+use rmi_lib::{train, train_bounded};
 use rmi_lib::KeyType;
 use rmi_lib::optimizer;
 
@@ -82,6 +82,10 @@ fn main() {
              .short("t")
              .value_name("count")
              .help("number of threads to use for optimization, default = 4"))
+        .arg(Arg::with_name("bounded")
+             .long("bounded")
+             .value_name("line_size")
+             .help("Construct an error-bounded RMI using the cachefix method for the given line size"))
         .arg(Arg::with_name("disable-parallel-training")
              .long("disable-parallel-training")
              .help("disables training multiple RMIs in parallel"))
@@ -195,8 +199,7 @@ fn main() {
                         .map(|d| d.as_nanos())
                         .unwrap_or(std::u128::MAX);
                     
-                    let size_bs = rmi_lib::rmi_size(&trained_model.rmi, true);
-                    let size_ls = rmi_lib::rmi_size(&trained_model.rmi, false);
+                    let size_bs = rmi_lib::rmi_size(&trained_model);
                     
                     let result_obj = object! {
                         "layers" => models.clone(),
@@ -211,7 +214,6 @@ fn main() {
                             / num_rows as f64 * 100.0,
                         "max log2 error" => trained_model.model_max_log2_error,
                         "size binary search" => size_bs,
-                        "size linear search" => size_ls,
                         "namespace" => namespace.clone()
                     };
                     
@@ -262,7 +264,15 @@ fn main() {
             .unwrap();
 
         let start_time = SystemTime::now();
-        let trained_model = train(&mut data, models, branch_factor);
+        let trained_model = match matches.value_of("bounded") {
+            None => train(&mut data, models, branch_factor),
+            Some(s) => {
+                let line_size = s.parse::<usize>()
+                    .expect("Line size must be a positive integer.");
+                train_bounded(&mut data, models, branch_factor, line_size)
+            }
+        };
+        
         let build_time = SystemTime::now()
             .duration_since(start_time)
             .map(|d| d.as_nanos())

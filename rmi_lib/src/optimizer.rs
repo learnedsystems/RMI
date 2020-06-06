@@ -128,7 +128,7 @@ impl RMIStatistics {
         return RMIStatistics {
             average_log2_error: rmi.model_avg_log2_error,
             max_log2_error: rmi.model_max_log2_error,
-            size: codegen::rmi_size(&rmi.rmi, true),
+            size: codegen::rmi_size(&rmi),
             models: rmi.models.clone(),
             branching_factor: rmi.branching_factor
         };

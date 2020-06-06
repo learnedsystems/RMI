@@ -285,7 +285,7 @@ impl LayerParams {
         return Result::Ok(());
     }
 
-    fn with_zipped_errors(&self, lle: Vec<u64>) -> LayerParams {
+    fn with_zipped_errors(&self, lle: &[u64]) -> LayerParams {
         
         let params = self.params();
         // integrate the errors into the model parameters of the last
@@ -299,7 +299,7 @@ impl LayerParams {
             .flat_map(|(mod_params, err)| {
                 let mut to_r: Vec<ModelParam> = Vec::new();
                 to_r.extend_from_slice(mod_params);
-                to_r.push(ModelParam::Int(err));
+                to_r.push(ModelParam::Int(*err));
                 to_r
             }).collect();
 
@@ -370,21 +370,79 @@ macro_rules! model_index_from_output {
     };
 }
 
-pub fn rmi_size(rmi: &[Vec<Box<dyn Model>>], report_last_layer_errors: bool) -> u64 {
+pub fn rmi_size(rmi: &TrainedRMI) -> u64 {
     // compute the RMI size (used in the header, compute here before consuming)
     let mut num_total_bytes = 0;
-    for layer in rmi.iter() {
+    for layer in rmi.rmi.iter() {
         let model_on_this_layer_size: usize = layer[0].params().iter().map(|p| p.size()).sum();
         
         // assume all models on this layer have the same size
         num_total_bytes += model_on_this_layer_size * layer.len();
     }
 
-    if report_last_layer_errors {
-        num_total_bytes += rmi.last().unwrap().len() * 8;
+    if !rmi.last_layer_max_l1s.is_empty() {
+        num_total_bytes += rmi.rmi.last().unwrap().len() * 8;
+    }
+
+    if rmi.cache_fix.is_some() {
+        num_total_bytes += rmi.cache_fix.as_ref().unwrap().1.len() * 16;
     }
     
     return num_total_bytes as u64;
+}
+
+fn generate_cache_fix_code<T: Write>(
+    target: &mut T,
+    rmi: &TrainedRMI,
+    array_name: String) -> Result<(), std::io::Error> {
+
+    let num_splines = rmi.cache_fix.as_ref().unwrap().1.len();
+    let line_size = rmi.cache_fix.as_ref().unwrap().0;
+    let total_keys = rmi.num_data_rows;
+
+    writeln!(target,
+             "
+struct __attribute__((packed)) SplinePoint {{
+  uint64_t key;
+  uint64_t value;
+}};
+
+uint64_t lookup(uint64_t key, size_t* err) {{
+  const uint64_t num_spline_pts = {};
+  const uint64_t total_keys = {};
+  size_t error_on_spline_search;
+
+  struct SplinePoint* begin = (struct SplinePoint*) {};
+
+  *err = {};
+  uint64_t start = _rmi_lookup_pre_cachefix(key, &error_on_spline_search);
+
+  size_t upper = (start + error_on_spline_search > num_spline_pts
+                  ? num_spline_pts : start + error_on_spline_search);
+  size_t lower = (error_on_spline_search > start
+                  ? 0 : start - error_on_spline_search);
+                  
+  
+  struct SplinePoint* res = std::lower_bound(begin + lower,
+                                             begin + upper,
+                                             key,
+                                             [](const auto& lhs, const auto rhs) {{ return lhs.key < rhs; }});
+
+  if (res == begin + num_spline_pts)
+    // we've searched for something past the last point
+    return total_keys - 1;
+
+  auto pt1 = *(res - 1);
+  auto pt2 = *res;
+
+  auto v0 = (double)pt1.value;
+  auto v1 = (double)pt2.value;
+  auto t = ((double)(key - pt1.key)) / (double)(pt2.key - pt1.key);
+  return (((uint64_t) std::fma(1.0 - t, v0, t * v1)) / {3}) * {3};
+}}", num_splines, total_keys, array_name, line_size)?;
+    
+
+    return Ok(());
 }
 
 fn generate_code<T: Write>(
@@ -392,41 +450,48 @@ fn generate_code<T: Write>(
     data_output: &mut T,
     header_output: &mut T,
     namespace: &str,
-    total_rows: usize,
-    rmi: Vec<Vec<Box<dyn Model>>>,
-    last_layer_errors: Option<Vec<u64>>,
+    rmi: TrainedRMI,
     data_dir: &str,
     build_time: u128,
     key_type: KeyType
 ) -> Result<(), std::io::Error> {
     // construct the code for the model parameters.
-    let mut layer_params: Vec<LayerParams> = rmi
+    let mut layer_params: Vec<LayerParams> = rmi.rmi
         .iter()
         .enumerate()
         .map(|(layer_idx, models)| params_for_layer(layer_idx, models))
         .collect();
     
-    let report_last_layer_errors = last_layer_errors.is_some();
+    let report_last_layer_errors = !rmi.last_layer_max_l1s.is_empty();
 
     let mut report_lle: Vec<u8> = Vec::new();
     if report_last_layer_errors {
-        if let Some(lle) = last_layer_errors {
-            assert!(!lle.is_empty());
-            if lle.len() > 1 {
-                let old_last = layer_params.pop().unwrap();
-                let new_last = old_last.with_zipped_errors(lle);
-
-                write!(report_lle, "  *err = ")?;
-                new_last.access_by_ref(&mut report_lle, "modelIndex",
-                                       new_last.params_per_model() - 1)?;
-                writeln!(report_lle, ";")?;
-                
-                layer_params.push(new_last);
-
-            } else {
-                write!(report_lle, "  *err = {};", lle[0])?;
-            }
+        let lle = &rmi.last_layer_max_l1s;
+        if lle.len() > 1 {
+            let old_last = layer_params.pop().unwrap();
+            let new_last = old_last.with_zipped_errors(lle);
+            
+            write!(report_lle, "  *err = ")?;
+            new_last.access_by_ref(&mut report_lle, "modelIndex",
+                                   new_last.params_per_model() - 1)?;
+            writeln!(report_lle, ";")?;
+            
+            layer_params.push(new_last);
+            
+        } else {
+            write!(report_lle, "  *err = {};", lle[0])?;
         }
+    }
+
+    if rmi.cache_fix.is_some() {
+        let cfv: Vec<ModelParam> = rmi.cache_fix.as_ref().unwrap().1.iter()
+            .flat_map(|(mi, offset)| vec![mi.as_int().into(), (*offset).into()])
+            .collect();
+        let cache_fix_params = LayerParams::new(
+            layer_params.len(), true, 2, cfv
+        );
+
+        layer_params.push(cache_fix_params);
     }
 
     trace!("Layer parameters:");
@@ -497,7 +562,7 @@ fn generate_code<T: Write>(
     // TODO assumes all layers are homogenous
     let mut decls = HashSet::new();
     let mut sigs = HashSet::new();
-    for layer in rmi.iter() {
+    for layer in rmi.rmi.iter() {
         for stdlib in layer[0].standard_functions() {
             decls.insert(stdlib.decl().to_string());
             sigs.insert(stdlib.code().to_string());
@@ -511,6 +576,9 @@ fn generate_code<T: Write>(
     writeln!(code_output, "#include <fstream>")?;
     writeln!(code_output, "#include <filesystem>")?;
     writeln!(code_output, "#include <iostream>")?;
+    if rmi.cache_fix.is_some() {
+        writeln!(code_output, "#include <algorithm>")?;
+    }
 
     writeln!(code_output, "namespace {} {{", namespace)?;
 
@@ -532,7 +600,7 @@ fn generate_code<T: Write>(
 
     // next, the model sigs
     sigs = HashSet::new();
-    for layer in rmi.iter() {
+    for layer in rmi.rmi.iter() {
         sigs.insert(layer[0].code());
     }
 
@@ -549,20 +617,26 @@ inline size_t FCLAMP(double inp, double bound) {{
 }}\n"
     )?;
 
-    let lookup_sig = if report_last_layer_errors {
-        format!("uint64_t lookup({} key, size_t* err)", key_type.c_type())
+    let rmi_lookup_name = if rmi.cache_fix.is_none() {
+        "lookup"
     } else {
-        format!("uint64_t lookup({} key)", key_type.c_type())
+        "_rmi_lookup_pre_cachefix"
+    };
+    
+    let lookup_sig = if report_last_layer_errors {
+        format!("uint64_t {}({} key, size_t* err)", rmi_lookup_name, key_type.c_type())
+    } else {
+        format!("uint64_t {}({} key)", rmi_lookup_name, key_type.c_type())
     };
     writeln!(code_output, "{} {{", lookup_sig)?;
 
     let mut needed_vars = HashSet::new();
-    if rmi.len() > 1 {
+    if rmi.rmi.len() > 1 {
         needed_vars.insert("size_t modelIndex;");
     }
 
     // determine if we have any layers with float (fpred) or int (ipred) outputs
-    for layer in rmi.iter() {
+    for layer in rmi.rmi.iter() {
         match layer[0].output_type() {
             ModelDataType::Int => needed_vars.insert("uint64_t ipred;"),
             ModelDataType::Float => needed_vars.insert("double fpred;"),
@@ -574,13 +648,13 @@ inline size_t FCLAMP(double inp, double bound) {{
         writeln!(code_output, "  {}", var)?;
     }
 
-    let model_size_bytes = rmi_size(&rmi, report_last_layer_errors);
+    let model_size_bytes = rmi_size(&rmi);
     info!("Generated model size: {:?} ({} bytes)", ByteSize(model_size_bytes), model_size_bytes);
 
     let mut last_model_output = key_type.to_model_data_type();
     let mut needs_bounds_check = true;
 
-    for (layer_idx, layer) in rmi.into_iter().enumerate() {
+    for (layer_idx, layer) in rmi.rmi.iter().enumerate() {
         let layer_param = &layer_params[layer_idx];
         let required_type = layer[0].input_type();
 
@@ -638,10 +712,14 @@ inline size_t FCLAMP(double inp, double bound) {{
     writeln!(
         code_output,
         "  return {};",
-        model_index_from_output!(last_model_output, total_rows, true)
+        model_index_from_output!(last_model_output, rmi.num_rmi_rows, true)
     )?; // always bounds check the last level
     writeln!(code_output, "}}")?;
 
+    if rmi.cache_fix.is_some() {
+        generate_cache_fix_code(code_output, &rmi, array_name!(layer_params.len()-1))?;
+    }
+    
     writeln!(code_output, "}} // namespace")?;
 
     // write out our forward declarations
@@ -651,13 +729,6 @@ inline size_t FCLAMP(double inp, double bound) {{
 
     writeln!(header_output, "bool load(char const* dataPath);")?;
     writeln!(header_output, "void cleanup();")?;
-
-    
-    if !report_last_layer_errors {
-        writeln!(header_output, "#ifdef EXTERN_RMI_LOOKUP")?;
-        writeln!(header_output, "extern \"C\" uint64_t lookup(uint64_t key);")?;
-        writeln!(header_output, "#endif")?;
-    }
 
     writeln!(
         header_output,
@@ -671,7 +742,11 @@ inline size_t FCLAMP(double inp, double bound) {{
         build_time
     )?;
     writeln!(header_output, "const char NAME[] = \"{}\";", namespace)?;
-    writeln!(header_output, "{};", lookup_sig)?;
+    if rmi.cache_fix.is_none() {
+        writeln!(header_output, "{};", lookup_sig)?;
+    } else {
+        writeln!(header_output, "uint64_t lookup(uint64_t key, size_t* err);")?;
+    }
     writeln!(header_output, "}}")?;
 
     return Result::Ok(());
@@ -679,7 +754,7 @@ inline size_t FCLAMP(double inp, double bound) {{
 
 
 pub fn output_rmi(namespace: &str,
-                  trained_model: TrainedRMI,
+                  mut trained_model: TrainedRMI,
                   build_time: u128,
                   data_dir: &str,
                   key_type: KeyType,
@@ -694,21 +769,17 @@ pub fn output_rmi(namespace: &str,
     
     let f3 = File::create(format!("{}.h", namespace)).expect("Could not write RMI header file");
     let mut bw3 = BufWriter::new(f3);
-    
-    let lle = if include_errors {
-        Some(trained_model.last_layer_max_l1s)
-    } else {
-        None
-    };
-        
+
+    if !include_errors {
+        trained_model.last_layer_max_l1s.clear();
+    }
+
     return generate_code(
         &mut bw1,
         &mut bw2,
         &mut bw3,
         namespace,
-        trained_model.num_rows,
-        trained_model.rmi,
-        lle,
+        trained_model,
         data_dir,
         build_time,
         key_type
