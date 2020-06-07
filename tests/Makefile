@@ -1,6 +1,6 @@
 
-ALL_RESULTS=results/cache_fix_result
-ALL_TESTS=cache_fix
+ALL_TESTS=$(shell ./find_tests.py)
+ALL_RESULTS=$(patsubst %, results/%_result, $(ALL_TESTS))
 
 .PHONY: all
 all: results $(ALL_RESULTS)
@@ -17,11 +17,14 @@ rmi: $(shell find ../src/) $(shell find ../rmi_lib/src/)
 	cd .. && cargo build --release
 	cp ../target/release/rmi .
 
-results/cache_fix_result: results rmi wiki_ts_200M_uint64 cache_fix
-	cd cache_fix && make
-	cp cache_fix/result results/cache_fix_result
 
-.PHONY: clean
+results/%_result: results rmi wiki_ts_200M_uint64 FORCE 
+	cd $* && make
+	cp $*/result results/$*_result
+
+
+.PHONY: clean FORCe
 clean:
 	rm -rf results rmi
 	for test in $(ALL_TESTS) ; do make -C $$test clean ; done
+FORCE: 
