@@ -295,7 +295,8 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         rmi: vec![vec![top_model], leaf_models],
         models: format!("{},{}", layer1_model, layer2_model),
         branching_factor: num_leaf_models,
-        cache_fix: None
+        cache_fix: None,
+        build_time: 0
     };
 
 }

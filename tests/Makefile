@@ -13,11 +13,11 @@ results:
 wiki_ts_200M_uint64:
 	wget  https://dataverse.harvard.edu/api/access/datafile/:persistentId?persistentId=doi:10.7910/DVN/JGVF9A/SVN8PI -O - | zstd -d > $@
 
-rmi: ../src
+rmi: $(shell find ../src/) $(shell find ../rmi_lib/src/)
 	cd .. && cargo build --release
 	cp ../target/release/rmi .
 
-results/cache_fix_result: rmi wiki_ts_200M_uint64 cache_fix
+results/cache_fix_result: results rmi wiki_ts_200M_uint64 cache_fix
 	cd cache_fix && make
 	cp cache_fix/result results/cache_fix_result
 

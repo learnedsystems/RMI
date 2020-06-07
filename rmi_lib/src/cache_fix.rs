@@ -28,10 +28,6 @@ impl Spline {
         return Spline { from_x: self.from_x, from_y: self.from_y,
                         to_x: dest.0.as_int(), to_y: dest.1 };
     }
-
-    fn start(&self) -> (ModelInput, usize) {
-        return (self.from_x.into(), self.from_y);
-    }
     
     fn end(&self) -> (ModelInput, usize) {
         return (self.to_x.into(), self.to_y);
@@ -47,7 +43,7 @@ impl Spline {
 }
 
 struct SplineFit {
-    splines: Vec<Spline>,
+    spline: Option<Spline>,
     curr_pts: Vec<(ModelInput, usize)>,
     line_size: usize
 }
@@ -56,63 +52,46 @@ impl SplineFit {
 
     pub fn new(line_size: usize) -> SplineFit {
         return SplineFit {
-            splines: vec![],
+            spline: None,
             curr_pts: Vec::new(),
             line_size
         };
     }
 
-    pub fn add_point(&mut self, point: (ModelInput, usize)) {
-        if self.splines.is_empty() {
-            self.splines.push(Spline::from(point, point));
-            return;
+    pub fn add_point(&mut self, point: (ModelInput, usize)) -> Option<(ModelInput, usize)> {
+        if self.spline.is_none() {
+            self.spline = Some(Spline::from(point, point));
+            return Some(point);
         }
+        
         // check to see if the current spline can include this point
-        let last_spline = self.splines.last().unwrap();
+        let last_spline = self.spline.as_ref().unwrap();
         let proposed_spline = last_spline.with_new_dest(point);
 
         self.curr_pts.push(last_spline.end());
         if self.check_spline(&proposed_spline) {
             // accept this proposal, it works.
-            let last_idx = self.splines.len() - 1;
-            self.splines[last_idx] = proposed_spline;
+            self.spline = Some(proposed_spline);
+            return None;
         } else {
             // reject this proposal, start a new spline.
             let prev_pt = last_spline.end();
             assert!(point.0 > prev_pt.0,
                     "new point: {:?} prev point: {:?}",
                     point, prev_pt);
-            debug_assert!(self.check_spline(&last_spline));
-            self.splines.push(Spline::from(prev_pt, point));
+
+            self.spline = Some(Spline::from(prev_pt, point));
             self.curr_pts.clear();
             self.curr_pts.push(point);
+            return Some(prev_pt);
         }
     }
 
 
-    pub fn finish(self) -> Vec<(ModelInput, usize)> {
-        let mut to_r = Vec::with_capacity(self.splines.len() + 1);
-        to_r.push(self.splines[0].start());
-
-        for spline in self.splines {
-            assert_eq!(*to_r.last().unwrap(), spline.start());
-            to_r.push(spline.end());
-        }
-        
-        return to_r;
+    pub fn finish(self) -> Option<(ModelInput, usize)> {
+        return self.spline.map(|s| s.end());
     }
 
-    /*fn predict(&self, key: ModelInput) {
-        let lb_idx = self.splines.lower_bound_by(|x| x.to_x.cmp(&key.as_int()));
-        info!("Found spline @ {} ({:?}) for key {}",
-              lb_idx, self.splines[lb_idx], key.as_int());
-
-        let pred = self.splines[lb_idx].predict(key);
-        info!("Pred: {}", pred);
-
-        let start_of_line = (pred / 8) * 8;
-        info!("Line {} starts at: {}", pred / 8, start_of_line);
-    }*/
     
     fn check_spline(&self, spline: &Spline) -> bool {
         for pt in self.curr_pts.iter() {
@@ -134,6 +113,7 @@ pub fn cache_fix(data: &RMITrainingData, line_size: usize) -> Vec<(ModelInput, u
     info!("Fitting cachefix spline to {} datapoints", data.len());
     
     let mut fit = SplineFit::new(line_size);
+    let mut spline = Vec::new();
 
     // Potential speedup here by carefully building a spline over the first
     // and last element of each cache line. Requires careful handling of duplicates,
@@ -143,29 +123,27 @@ pub fn cache_fix(data: &RMITrainingData, line_size: usize) -> Vec<(ModelInput, u
         assert!(key.minus_epsilon() >= last_key,
                 "key: {:?} last key: {:?}, key - e: {:?}",
                 key, last_key, key.minus_epsilon());
+        
         if key.minus_epsilon() != last_key {
-            fit.add_point((key.minus_epsilon(), offset));
+            match fit.add_point((key.minus_epsilon(), offset)) {
+                None => {},
+                Some(p) => spline.push(p)
+            };
         }
         
-        fit.add_point((key, offset));
+        match fit.add_point((key, offset)) {
+            None => {},
+            Some(p) => spline.push(p)
+        };
+        
         last_key = key;
     }
 
 
-    let spline = fit.finish();
-
-    // ensure the spline points are monotonic if in debug mode
-    #[cfg(debug_assertions)]
-    {
-        let mut last_x: ModelInput = 0.into();
-        for (x, _y) in spline.iter() {
-            debug_assert!(*x >= last_x,
-                          "Spline model was non-monotonic!");
-            last_x = *x;
-        }
-        trace!("Spline model was monotonic.");
-    }
-
+    match fit.finish() {
+        None => {},
+        Some(p) => spline.push(p)
+    };
     
     info!("Bounded spline compressed data to {}% of original ({} points, constructed from {} points).",
           ((spline.len() as f64 / data.len() as f64)*100.0).round(),

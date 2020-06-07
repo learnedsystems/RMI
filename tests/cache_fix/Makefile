@@ -4,7 +4,7 @@ result: test
 	echo $(.SHELLSTATUS) > result
 	cat stdout >> result
 
-rmi.cpp:
+rmi.cpp: ../rmi
 	../rmi ../wiki_ts_200M_uint64 rmi linear_spline,linear 4194304 --bounded 8
 
 test: main.cpp rmi.cpp
@@ -12,4 +12,4 @@ test: main.cpp rmi.cpp
 
 .PHONY: clean
 clean:
-	rm -rf test result rmi*
+	rm -rf test result rmi* 

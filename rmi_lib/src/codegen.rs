@@ -452,7 +452,6 @@ fn generate_code<T: Write>(
     namespace: &str,
     rmi: TrainedRMI,
     data_dir: &str,
-    build_time: u128,
     key_type: KeyType
 ) -> Result<(), std::io::Error> {
     // construct the code for the model parameters.
@@ -735,11 +734,11 @@ inline size_t FCLAMP(double inp, double bound) {{
         "const size_t RMI_SIZE = {};",
         model_size_bytes
     )?;
-    assert!(build_time <= u128::from(std::u64::MAX));
+    assert!(rmi.build_time <= u128::from(std::u64::MAX));
     writeln!(
         header_output,
         "const uint64_t BUILD_TIME_NS = {};",
-        build_time
+        rmi.build_time
     )?;
     writeln!(header_output, "const char NAME[] = \"{}\";", namespace)?;
     if rmi.cache_fix.is_none() {
@@ -755,7 +754,6 @@ inline size_t FCLAMP(double inp, double bound) {{
 
 pub fn output_rmi(namespace: &str,
                   mut trained_model: TrainedRMI,
-                  build_time: u128,
                   data_dir: &str,
                   key_type: KeyType,
                   include_errors: bool) -> Result<(), std::io::Error> {
@@ -781,7 +779,6 @@ pub fn output_rmi(namespace: &str,
         namespace,
         trained_model,
         data_dir,
-        build_time,
         key_type
     );
         

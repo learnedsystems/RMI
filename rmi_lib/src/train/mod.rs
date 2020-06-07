@@ -8,6 +8,8 @@
 
 use crate::models::*;
 use crate::cache_fix::cache_fix;
+use log::*;
+use std::time::SystemTime;
 
 mod two_layer;
 //mod multi_layer;
@@ -26,7 +28,8 @@ pub struct TrainedRMI {
     pub rmi: Vec<Vec<Box<dyn Model>>>,
     pub models: String,
     pub branching_factor: u64,
-    pub cache_fix: Option<(usize, Vec<(ModelInput, usize)>)>
+    pub cache_fix: Option<(usize, Vec<(ModelInput, usize)>)>,
+    pub build_time: u128
 }
 
 impl TrainedRMI {
@@ -113,7 +116,8 @@ fn validate(model_spec: &[String]) {
 
 pub fn train(data: &RMITrainingData,
              model_spec: &str, branch_factor: u64) -> TrainedRMI {
-    
+
+    let start_time = SystemTime::now();
     let (model_list, last_model): (Vec<String>, String) = {
         let mut all_models: Vec<String> = model_spec.split(',').map(String::from).collect();
         validate(&all_models);
@@ -122,8 +126,14 @@ pub fn train(data: &RMITrainingData,
     };
 
     if model_list.len() == 1 {
-        let res = two_layer::train_two_layer(&mut data.soft_copy(), &model_list[0],
+        let mut res = two_layer::train_two_layer(&mut data.soft_copy(), &model_list[0],
                                              &last_model, branch_factor);
+        let build_time = SystemTime::now()
+            .duration_since(start_time)
+            .map(|d| d.as_nanos())
+            .unwrap_or(std::u128::MAX);
+        res.build_time = build_time;
+        
         return res;
     }
 
@@ -132,11 +142,39 @@ pub fn train(data: &RMITrainingData,
     panic!(); // TODO
 }
 
+pub fn train_for_size(data: &RMITrainingData,
+                      max_size: usize) -> TrainedRMI {
+
+    let start_time = SystemTime::now();
+    let pareto = crate::find_pareto_efficient_configs(data, 1000);
+    // go down the front until we find something small enough
+
+    let config = pareto.into_iter()
+        .filter(|x| x.size < max_size as u64)
+        .next()
+        .expect(format!(
+            "Could not find any configurations smaller than {}", max_size).as_str());
+
+    let models = config.models;
+    let bf = config.branching_factor;
+
+    info!("Found RMI config {} {} with size {} and average log2 {}",
+          models, bf, config.size, config.average_log2_error);
+    let mut res = train(data, models.as_str(), bf);
+    
+    let build_time = SystemTime::now()
+            .duration_since(start_time)
+            .map(|d| d.as_nanos())
+            .unwrap_or(std::u128::MAX);
+    res.build_time = build_time;
+    return res;
+}
+
 pub fn train_bounded(data: &RMITrainingData,
                      model_spec: &str,
                      branch_factor: u64,
                      line_size: usize) -> TrainedRMI {
-
+    let start_time = SystemTime::now();
     // first, transform our data into error-bounded spline points
     let spline = cache_fix(data, line_size);
     std::mem::drop(data);
@@ -149,23 +187,15 @@ pub fn train_bounded(data: &RMITrainingData,
     
     // construct new training data from our spline points
     let mut new_data = RMITrainingData::new(Box::new(reindexed_splines));
+
+    let mut res = crate::train(&mut new_data, model_spec, branch_factor);
+    res.cache_fix = Some((line_size, spline));
+    res.num_data_rows = data.len();
     
-    let (model_list, last_model): (Vec<String>, String) = {
-        let mut all_models: Vec<String> = model_spec.split(',').map(String::from).collect();
-        validate(&all_models);
-        let last = all_models.pop().unwrap();
-        (all_models, last)
-    };
-
-    if model_list.len() == 1 {
-        let mut res = two_layer::train_two_layer(&mut new_data, &model_list[0],
-                                                 &last_model, branch_factor);
-        res.cache_fix = Some((line_size, spline));
-        res.num_data_rows = data.len();
-        return res;
-    }
-
-    // it is not a simple, two layer rmi
-    //return multi_layer::train_multi_layer(data, &model_list, last_model, branch_factor);
-    panic!(); // TODO
+    let build_time = SystemTime::now()
+        .duration_since(start_time)
+        .map(|d| d.as_nanos())
+        .unwrap_or(std::u128::MAX);
+    res.build_time = build_time;
+    return res;
 }

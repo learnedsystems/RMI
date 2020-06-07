@@ -22,8 +22,6 @@ use log::*;
 use std::f64;
 use std::fs::File;
 use std::io::BufWriter;
-use std::io::Write;
-use std::time::SystemTime;
 use std::fs;
 use std::path::Path;
 use rayon::prelude::*;
@@ -85,7 +83,11 @@ fn main() {
         .arg(Arg::with_name("bounded")
              .long("bounded")
              .value_name("line_size")
-             .help("Construct an error-bounded RMI using the cachefix method for the given line size"))
+             .help("construct an error-bounded RMI using the cachefix method for the given line size"))
+        .arg(Arg::with_name("max-size")
+             .long("max-size")
+             .value_name("BYTES")
+             .help("uses the optimizer fo find an RMI with a size less than specified"))
         .arg(Arg::with_name("disable-parallel-training")
              .long("disable-parallel-training")
              .help("disables training multiple RMIs in parallel"))
@@ -191,13 +193,8 @@ fn main() {
                     trace!("Training RMI {} with branching factor {}",
                            models, *branch_factor);
                     
-                    let start_time = SystemTime::now();
                     let mut loc_data = data.soft_copy();
                     let trained_model = train(&mut loc_data, models, *branch_factor);
-                    let build_time = SystemTime::now()
-                        .duration_since(start_time)
-                        .map(|d| d.as_nanos())
-                        .unwrap_or(std::u128::MAX);
                     
                     let size_bs = rmi_lib::rmi_size(&trained_model);
                     
@@ -221,7 +218,6 @@ fn main() {
                         rmi_lib::output_rmi(
                             &nmspc,
                             trained_model,
-                            build_time,
                             data_dir,
                             key_type,
                             true).unwrap();
@@ -256,30 +252,37 @@ fn main() {
 
     } else if matches.value_of("namespace").is_some() {
         let namespace = matches.value_of("namespace").unwrap().to_string();
-        let models = matches.value_of("models").unwrap();
-        let branch_factor = matches
-            .value_of("branching factor")
-            .unwrap()
-            .parse::<u64>()
-            .unwrap();
+        let trained_model = match matches.value_of("max-size") {
+            None => {
+                // assume they gave a model spec 
+                let models = matches.value_of("models").unwrap();
+                let branch_factor = matches
+                    .value_of("branching factor")
+                    .unwrap()
+                    .parse::<u64>()
+                    .unwrap();
+        
+                let trained_model = match matches.value_of("bounded") {
+                    None => train(&mut data, models, branch_factor),
+                    Some(s) => {
+                        let line_size = s.parse::<usize>()
+                            .expect("Line size must be a positive integer.");
+                        train_bounded(&mut data, models, branch_factor, line_size)
+                    }
+                };
+                trained_model
+            }
+            Some(max_size_str) => {
+                let max_size = max_size_str.parse::<usize>().unwrap();
+                info!("Constructing RMI with size less than {}", max_size);
 
-        let start_time = SystemTime::now();
-        let trained_model = match matches.value_of("bounded") {
-            None => train(&mut data, models, branch_factor),
-            Some(s) => {
-                let line_size = s.parse::<usize>()
-                    .expect("Line size must be a positive integer.");
-                train_bounded(&mut data, models, branch_factor, line_size)
+                let trained_model = rmi_lib::train_for_size(&mut data, max_size);
+                trained_model
             }
         };
         
-        let build_time = SystemTime::now()
-            .duration_since(start_time)
-            .map(|d| d.as_nanos())
-            .unwrap_or(std::u128::MAX);
-
         let no_errors = matches.is_present("no-errors");
-        info!("Model build time: {} ms", build_time / 1_000_000);
+        info!("Model build time: {} ms", trained_model.build_time / 1_000_000);
 
         info!(
             "Average model error: {} ({}%)",
@@ -305,35 +308,10 @@ fn main() {
             trained_model.model_max_error as f64 / num_rows as f64 * 100.0
         );
         
-        match matches.value_of("stats-file") {
-            None => {}
-            Some(stats_fp) => {
-                let output = object! {
-                    "average error" => trained_model.model_avg_error,
-                    "average l2 error" => trained_model.model_avg_l2_error,
-                    "average log2 error" => trained_model.model_avg_log2_error,
-                    "max log2 error" => trained_model.model_max_log2_error,
-                    "max error" => trained_model.model_max_error
-                };
-                
-                let f = File::create(stats_fp.to_string()).expect("Could not write stats file");
-                let mut bw = BufWriter::new(f);
-                writeln!(bw, "{}", output.dump()).unwrap();
-            }
-        }
-
-        if matches.is_present("dump-ll-errors") {
-            let output = object!{"last level errors" => trained_model.last_layer_max_l1s.clone() };
-            let f = File::create("ll_errors.json").expect("Could not write stats file");
-            let mut bw = BufWriter::new(f);
-            writeln!(bw, "{}", output.dump()).unwrap();
-        }
-        
         if !matches.is_present("no-code") {
             rmi_lib::output_rmi(
                 &namespace,
                 trained_model,
-                build_time,
                 data_dir,
                 key_type,
                 !no_errors).unwrap();

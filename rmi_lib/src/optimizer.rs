@@ -8,8 +8,12 @@ use rayon::prelude::*;
 use std::collections::BTreeSet;
 use tabular::{Table, row};
 
-const TOP_ONLY_LAYERS: &[&str] = &["radix", "radix18", "radix22", "robust_linear"];
+//const TOP_ONLY_LAYERS: &[&str] = &["radix", "radix18", "radix22", "robust_linear"];
+//const ANYWHERE_LAYERS: &[&str] = &["linear", "cubic", "linear_spline"];
+
+const TOP_ONLY_LAYERS: &[&str] = &["robust_linear"];
 const ANYWHERE_LAYERS: &[&str] = &["linear", "cubic", "linear_spline"];
+
 //const SPECIALTY_TOP_LAYERS: &[&str] = &["histogram", "loglinear", "normal", "lognormal", "bradix"];
 
 fn get_branching_factors() -> Vec<u64> {
