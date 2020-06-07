@@ -169,4 +169,3 @@ pub fn train_bounded(data: &RMITrainingData,
     //return multi_layer::train_multi_layer(data, &model_list, last_model, branch_factor);
     panic!(); // TODO
 }
-
