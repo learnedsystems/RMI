@@ -94,16 +94,12 @@ impl SplineFit {
 
     
     fn check_spline(&self, spline: &Spline) -> bool {
-        for pt in self.curr_pts.iter() {
-            let predicted_line: usize = spline.predict(pt.0) / self.line_size;
-            let correct_line: usize = pt.1 / self.line_size;
-            
-            if predicted_line != correct_line {
-                return false;
-            }
-        }
-
-        return true;
+        return self.curr_pts.iter()
+            .all(|pt| {
+                let predicted_line: usize = spline.predict(pt.0) / self.line_size;
+                let correct_line: usize = pt.1 / self.line_size;
+                predicted_line == correct_line
+            });
     }
 }
 

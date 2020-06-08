@@ -10,18 +10,50 @@ use tabular::{Table, row};
 
 //const TOP_ONLY_LAYERS: &[&str] = &["radix", "radix18", "radix22", "robust_linear"];
 //const ANYWHERE_LAYERS: &[&str] = &["linear", "cubic", "linear_spline"];
-
-const TOP_ONLY_LAYERS: &[&str] = &["robust_linear"];
-const ANYWHERE_LAYERS: &[&str] = &["linear", "cubic", "linear_spline"];
-
 //const SPECIALTY_TOP_LAYERS: &[&str] = &["histogram", "loglinear", "normal", "lognormal", "bradix"];
 
+fn top_only_layers() -> Vec<&'static str> {
+    return match std::env::var_os("RMI_OPTIMIZER_PROFILE") {
+        None => vec!["radix", "radix18", "radix22", "robust_linear"],
+        Some(x) => {
+            match x.to_str().unwrap() {
+                "fast" => vec!["robust_linear"],
+                "memory" => vec!["radix", "radix18", "radix22", "robust_linear"],
+                "disk" => vec!["radix", "radix18", "radix22", "robust_linear",
+                               "normal", "lognormal", "loglinear"],
+                _ => panic!("Invalid optimizer profile {}", x.to_str().unwrap())
+            }
+        }
+    };
+}
+
+fn anywhere_layers() -> Vec<&'static str> {
+    return match std::env::var_os("RMI_OPTIMIZER_PROFILE") {
+        None => vec!["linear", "cubic", "linear_spline"],
+        Some(x) => {
+            match x.to_str().unwrap() {
+                "fast" => vec!["linear", "cubic"],
+                "memory" | "disk" => vec!["linear", "cubic", "linear_spline"],
+                _ => panic!("Invalid optimizer profile {}", x.to_str().unwrap())
+            }
+        }
+    };
+}
+
 fn get_branching_factors() -> Vec<u64> {
-    let mut branching_factors: Vec<u64> = Vec::new();
-    for i in 6..25 {
-        branching_factors.push((2 as u64).pow(i));
-    }
-    return branching_factors;
+    let range = match std::env::var_os("RMI_OPTIMIZER_PROFILE") {
+        None => (6..25).step_by(1),
+        Some(x) => {
+            match x.to_str().unwrap() {
+                "fast" => (6..25).step_by(2),
+                "memory" => (6..25).step_by(1),
+                "disk" => (6..28).step_by(1),
+                _ => panic!("Invalid optimizer profile {}", x.to_str().unwrap())
+            }
+        }
+    };
+
+    return range.map(|i| (2 as u64).pow(i)).collect();
 }
 
 fn pareto_front(results: &[RMIStatistics]) -> Vec<RMIStatistics> {
@@ -78,11 +110,11 @@ fn narrow_front(results: &[RMIStatistics], desired_size: usize) -> Vec<RMIStatis
 fn first_phase_configs() -> Vec<(String, u64)> {
     let mut results = Vec::new();
     let mut all_top_models = Vec::new();
-    all_top_models.extend_from_slice(TOP_ONLY_LAYERS);
-    all_top_models.extend_from_slice(ANYWHERE_LAYERS);
+    all_top_models.extend(top_only_layers());
+    all_top_models.extend(anywhere_layers());
     
     for top_model in all_top_models {
-        for bottom_model in ANYWHERE_LAYERS {
+        for bottom_model in anywhere_layers() {
             for branching_factor in get_branching_factors().iter().step_by(5) {
                 results.push((format!("{},{}", top_model, bottom_model), *branching_factor));
             }

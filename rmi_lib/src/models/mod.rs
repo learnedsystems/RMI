@@ -214,9 +214,9 @@ macro_rules! map_scale {
         let use_sf = (sf - 1.0).abs() > std::f64::EPSILON;
         ($inp).map(move |(key, offset)| {
                 if use_sf {
-                    (key.into(), (offset as f64 * sf) as usize)
+                    (key, (offset as f64 * sf) as usize)
                 } else {
-                    (key.into(), offset)
+                    (key, offset)
                 }
             })
     }}
