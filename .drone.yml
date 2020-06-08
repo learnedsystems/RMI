@@ -1,0 +1,13 @@
+kind: pipeline
+type: docker
+name: default
+
+steps:
+  - name: test
+    image: rust:latest
+    commands:
+      - apt-get update
+      - apt-get -y upgrade
+      - apt-get -y install zstd curl g++-8
+      - cd tests
+      - make -j 2

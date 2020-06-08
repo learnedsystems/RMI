@@ -1,5 +1,7 @@
 # RMI
 
+[![Build Status](https://drone.rm.cab/api/badges/learnedsystems/RMI/status.svg)](https://drone.rm.cab/learnedsystems/RMI)
+
 This is a reference implementation of recursive model indexes (RMIs). A prototype RMI was initially described in [The Case for Learned Index Structures](https://arxiv.org/abs/1712.01208) by Kraska et al. in 2017.
 
 ![Fig 1 from the Case for Learned Index Structures](http://people.csail.mit.edu/ryanmarcus/rmi.png)
