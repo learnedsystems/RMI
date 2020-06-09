@@ -103,7 +103,7 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
 
     let num_rows = md_container.len();
 
-    info!("Training top-level {} model layer", layer1_model);
+    trace!("Training top-level {} model layer", layer1_model);
     md_container.set_scale(num_leaf_models as f64 / num_rows as f64);
     let top_model = train_model(layer1_model, &md_container);
 
@@ -121,7 +121,7 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         trace!("Top model was monotonic.");
     }
 
-    info!("Training second-level {} model layer (num models = {})",
+    trace!("Training second-level {} model layer (num models = {})",
           layer2_model, num_leaf_models);
     md_container.set_scale(1.0);
 
@@ -138,12 +138,9 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         let key_at = top_model.predict_to_int(md_container.get_key(split_idx).into());
         let key_pr = top_model.predict_to_int(md_container.get_key(split_idx - 1).into());
         assert!(key_at > key_pr);
-        trace!("Split point is valid, maps to {} (prev maps to {})",
-               key_at, key_pr);
     }
 
     let mut leaf_models = if split_idx >= md_container.len() {
-        warn!("All of the data is being mapped into less than half the number of leaf models. Parallelism disabled.");
         build_models_from(&md_container, &top_model, layer2_model,
                           0, md_container.len(), 0,
                           num_leaf_models as usize)
@@ -151,9 +148,6 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         let split_idx_target = u64::min(num_leaf_models - 1,
                                         top_model.predict_to_int(md_container.get_key(split_idx).into()))
             as usize;
-        trace!("Split index was: {} (target: {})", split_idx, split_idx_target);
-
-        
 
         let first_half_models = split_idx_target as usize;
         let second_half_models = num_leaf_models as usize - split_idx_target as usize;
@@ -174,12 +168,12 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
         leaf_models
     };
 
-    info!("Computing lower bound stats...");
+    trace!("Computing lower bound stats...");
     let lb_corrections = LowerBoundCorrection::new(
         |x| top_model.predict_to_int(x), num_leaf_models, md_container
     );
 
-    info!("Fixing empty models...");
+    trace!("Fixing empty models...");
     // replace any empty model with a model that returns the correct constant
     // (for LB predictions), if the underlying model supports it.
     let mut could_not_replace = false;
@@ -202,7 +196,7 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
     }
     
     
-    info!("Computing last level errors...");
+    trace!("Computing last level errors...");
     // evaluate model, compute last level errors
     let mut last_layer_max_l1s = vec![(0, 0) ; num_leaf_models as usize];
     for (x, y) in md_container.iter() {
@@ -255,11 +249,11 @@ pub fn train_two_layer(md_container: &mut RMITrainingData,
     }
 
     if large_corrections > 1 {
-        info!("Of {} models, {} needed large lower bound corrections.",
+        trace!("Of {} models, {} needed large lower bound corrections.",
               num_leaf_models, large_corrections);
     }
                         
-    info!("Evaluating two-layer RMI...");
+    trace!("Evaluating two-layer RMI...");
     let (m_idx, m_err) = last_layer_max_l1s
         .iter().enumerate()
         .max_by_key(|(_idx, &x)| x.1).unwrap();
