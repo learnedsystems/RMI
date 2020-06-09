@@ -15,7 +15,7 @@ macro_rules! scale {
 }
 
 #[allow(clippy::float_cmp)]
-fn cubic(data: &RMITrainingData) -> (f64, f64, f64, f64) {
+fn cubic<T: TrainingKey>(data: &RMITrainingData<T>) -> (f64, f64, f64, f64) {
     if data.len() == 0 {
         return (0.0, 0.0, 1.0, 0.0);
     }
@@ -105,7 +105,7 @@ pub struct CubicSplineModel {
 }
 
 impl CubicSplineModel {
-    pub fn new(data: &RMITrainingData) -> CubicSplineModel {
+    pub fn new<T: TrainingKey>(data: &RMITrainingData<T>) -> CubicSplineModel {
         let cubic = CubicSplineModel {
             params: cubic(data),
         };
@@ -117,9 +117,9 @@ impl CubicSplineModel {
         let mut our_error = 0.0;
         let mut lin_error = 0.0;
 
-        for (x, y) in data.iter() {
-            let c_pred = cubic.predict_to_float(x);
-            let l_pred = linear.predict_to_float(x);
+        for (x, y) in data.iter_model_input() {
+            let c_pred = cubic.predict_to_float(&x);
+            let l_pred = linear.predict_to_float(&x);
 
             our_error += (c_pred - (y as f64)).abs();
             lin_error += (l_pred - (y as f64)).abs();
@@ -137,7 +137,7 @@ impl CubicSplineModel {
 }
 
 impl Model for CubicSplineModel {
-    fn predict_to_float(&self, inp: ModelInput) -> f64 {
+    fn predict_to_float(&self, inp: &ModelInput) -> f64 {
         let (a, b, c, d) = self.params;
         let val = inp.as_float();
 

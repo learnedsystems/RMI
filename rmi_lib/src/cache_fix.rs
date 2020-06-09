@@ -1,6 +1,6 @@
 use log::*;
+use crate::models::TrainingKey;
 use crate::RMITrainingData;
-use crate::models::ModelInput;
 
 #[derive(Debug)]
 pub struct Spline {
@@ -11,32 +11,32 @@ pub struct Spline {
 }
 
 impl Spline {
-    fn from(pt1: (ModelInput, usize), pt2: (ModelInput, usize)) -> Spline {
-        assert!(pt1.0.as_int() <= pt2.0.as_int(),
+    fn from(pt1: (u64, usize), pt2: (u64, usize)) -> Spline {
+        assert!(pt1.0 <= pt2.0,
                 "Cannot construct spline from {:?} to {:?}", pt1, pt2);
         assert!(pt1.1 <= pt2.1,
                 "Cannot construct spline from {:?} to {:?}", pt1, pt2);
-        return Spline { from_x: pt1.0.as_int(), from_y: pt1.1,
-                        to_x: pt2.0.as_int(), to_y: pt2.1 };
+        return Spline { from_x: pt1.0, from_y: pt1.1,
+                        to_x: pt2.0, to_y: pt2.1 };
     }
 
-    fn with_new_dest(&self, dest: (ModelInput, usize)) -> Spline {
-        assert!(dest.0.as_int() >= self.from_x,
+    fn with_new_dest(&self, dest: (u64, usize)) -> Spline {
+        assert!(dest.0 >= self.from_x,
                 "When source x is {}, cannot set dest x to {}",
-                self.from_x, dest.0.as_int());
+                self.from_x, dest.0);
         assert!(dest.1 >= self.from_y);
         return Spline { from_x: self.from_x, from_y: self.from_y,
-                        to_x: dest.0.as_int(), to_y: dest.1 };
+                        to_x: dest.0, to_y: dest.1 };
     }
     
-    fn end(&self) -> (ModelInput, usize) {
-        return (self.to_x.into(), self.to_y);
+    fn end(&self) -> (u64, usize) {
+        return (self.to_x, self.to_y);
     }
 
-    fn predict(&self, inp: ModelInput) -> usize {
+    fn predict(&self, inp: u64) -> usize {
         let v0 = self.from_y as f64;
         let v1 = self.to_y as f64;
-        let t = ((inp.as_int() - self.from_x) as f64) / (self.to_x - self.from_x) as f64;
+        let t = ((inp - self.from_x) as f64) / (self.to_x - self.from_x) as f64;
 
         return (1.0 - t).mul_add(v0, t * v1) as usize;
     }
@@ -44,7 +44,7 @@ impl Spline {
 
 struct SplineFit {
     spline: Option<Spline>,
-    curr_pts: Vec<(ModelInput, usize)>,
+    curr_pts: Vec<(u64, usize)>,
     line_size: usize
 }
 
@@ -58,7 +58,7 @@ impl SplineFit {
         };
     }
 
-    pub fn add_point(&mut self, point: (ModelInput, usize)) -> Option<(ModelInput, usize)> {
+    pub fn add_point(&mut self, point: (u64, usize)) -> Option<(u64, usize)> {
         if self.spline.is_none() {
             self.spline = Some(Spline::from(point, point));
             return Some(point);
@@ -88,7 +88,7 @@ impl SplineFit {
     }
 
 
-    pub fn finish(self) -> Option<(ModelInput, usize)> {
+    pub fn finish(self) -> Option<(u64, usize)> {
         return self.spline.map(|s| s.end());
     }
 
@@ -103,7 +103,7 @@ impl SplineFit {
     }
 }
 
-pub fn cache_fix(data: &RMITrainingData, line_size: usize) -> Vec<(ModelInput, usize)> {
+pub fn cache_fix(data: &RMITrainingData<u64>, line_size: usize) -> Vec<(u64, usize)> {
     assert!(data.len() > line_size,
             "Cannot apply a cachefix with fewer items than the line size");
     info!("Fitting cachefix spline to {} datapoints", data.len());
@@ -114,7 +114,7 @@ pub fn cache_fix(data: &RMITrainingData, line_size: usize) -> Vec<(ModelInput, u
     // Potential speedup here by carefully building a spline over the first
     // and last element of each cache line. Requires careful handling of duplicates,
     // especially when they cross cache lines.
-    let mut last_key = 0.into();
+    let mut last_key = 0;
     for (key, offset) in data.iter_unique() {
         assert!(key.minus_epsilon() >= last_key,
                 "key: {:?} last key: {:?}, key - e: {:?}",

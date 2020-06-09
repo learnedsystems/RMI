@@ -28,27 +28,12 @@ pub struct TrainedRMI {
     pub rmi: Vec<Vec<Box<dyn Model>>>,
     pub models: String,
     pub branching_factor: u64,
-    pub cache_fix: Option<(usize, Vec<(ModelInput, usize)>)>,
+    pub cache_fix: Option<(usize, Vec<(u64, usize)>)>,
     pub build_time: u128
 }
 
-impl TrainedRMI {
-    #[allow(dead_code)]
-    fn test_predict(&self, lookup_key: u64) -> (u64, u64) {
-        assert_eq!(self.rmi.len(), 2);
-        let top_model = &self.rmi[0][0];
-        let leaf_models = &self.rmi[1];
-        let num_leaf_models = leaf_models.len() as u64;
-        
-        let leaf_idx = top_model.predict_to_int(lookup_key.into());
-        let target = u64::min(num_leaf_models - 1, leaf_idx) as usize;
-        println!("Target leaf: {}", target);
-        let pred = leaf_models[target].predict_to_int(lookup_key.into());
-        return (pred, self.last_layer_max_l1s[target]);
-    }
-}
-
-fn train_model(model_type: &str, data: &RMITrainingData) -> Box<dyn Model> {
+fn train_model<T: TrainingKey>(model_type: &str,
+                              data: &RMITrainingData<T>) -> Box<dyn Model> {
     let model: Box<dyn Model> = match model_type {
         "linear" => Box::new(LinearModel::new(data)),
         "robust_linear" => Box::new(RobustLinearModel::new(data)),
@@ -65,8 +50,6 @@ fn train_model(model_type: &str, data: &RMITrainingData) -> Box<dyn Model> {
         "radix28" => Box::new(RadixTable::new(data, 28)),
         "bradix" => Box::new(BalancedRadixModel::new(data)),
         "histogram" => Box::new(EquidepthHistogramModel::new(data)),
-        "plr" => Box::new(BottomUpPLR::new(data)),
-        "pgm" => Box::new(PGM::new(data)),
         _ => panic!("Unknown model type: {}", model_type),
     };
 
@@ -75,7 +58,7 @@ fn train_model(model_type: &str, data: &RMITrainingData) -> Box<dyn Model> {
 
 fn validate(model_spec: &[String]) {
     let num_layers = model_spec.len();
-    let empty_container = RMITrainingData::empty();
+    let empty_container: RMITrainingData<u64> = RMITrainingData::empty();
 
     for (idx, model) in model_spec.iter().enumerate() {
         let restriction = train_model(model, &empty_container).restriction();
@@ -114,8 +97,8 @@ fn validate(model_spec: &[String]) {
              correct);
 }*/
 
-pub fn train(data: &RMITrainingData,
-             model_spec: &str, branch_factor: u64) -> TrainedRMI {
+pub fn train<T: TrainingKey>(data: &RMITrainingData<T>,
+                            model_spec: &str, branch_factor: u64) -> TrainedRMI {
 
     let start_time = SystemTime::now();
     let (model_list, last_model): (Vec<String>, String) = {
@@ -142,8 +125,8 @@ pub fn train(data: &RMITrainingData,
     panic!(); // TODO
 }
 
-pub fn train_for_size(data: &RMITrainingData,
-                      max_size: usize) -> TrainedRMI {
+pub fn train_for_size<T: TrainingKey>(data: &RMITrainingData<T>,
+                                     max_size: usize) -> TrainedRMI {
 
     let start_time = SystemTime::now();
     let pareto = crate::find_pareto_efficient_configs(data, 1000);
@@ -170,7 +153,7 @@ pub fn train_for_size(data: &RMITrainingData,
     return res;
 }
 
-pub fn train_bounded(data: &RMITrainingData,
+pub fn train_bounded(data: &RMITrainingData<u64>,
                      model_spec: &str,
                      branch_factor: u64,
                      line_size: usize) -> TrainedRMI {
@@ -180,7 +163,7 @@ pub fn train_bounded(data: &RMITrainingData,
     std::mem::drop(data);
 
     // reindex the spline points so we can build an RMI on top
-    let reindexed_splines: Vec<(ModelInput, usize)> = spline.iter()
+    let reindexed_splines: Vec<(u64, usize)> = spline.iter()
         .enumerate()
         .map(|(idx, (key, _old_offset))| (*key, idx))
         .collect();

@@ -217,7 +217,7 @@ impl RMIStatistics {
     }
 }
 
-fn measure_rmis(data: &RMITrainingData,
+fn measure_rmis<T: TrainingKey>(data: &RMITrainingData<T>,
                 configs: &[(String, u64)]) -> Vec<RMIStatistics> {
     let pbar = ProgressBar::new(configs.len() as u64);
     
@@ -230,8 +230,9 @@ fn measure_rmis(data: &RMITrainingData,
         }).collect()
 }
 
-pub fn find_pareto_efficient_configs(data: &RMITrainingData, restrict: usize)
-                                     -> Vec<RMIStatistics>{
+pub fn find_pareto_efficient_configs<T: TrainingKey>(
+    data: &RMITrainingData<T>, restrict: usize)
+    -> Vec<RMIStatistics>{
     let initial_configs  = first_phase_configs();
     let first_phase_results = measure_rmis(data, &initial_configs);
 

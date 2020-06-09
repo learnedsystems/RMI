@@ -9,8 +9,8 @@
 
 #![allow(clippy::needless_return)]
 
+#[macro_use]
 mod load;
-
 
 use load::{load_data, DataType};
 use rmi_lib::{train, train_bounded};
@@ -28,6 +28,7 @@ use rayon::prelude::*;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use clap::{App, Arg};
+
 
 fn main() {
     env_logger::init();
@@ -116,7 +117,7 @@ fn main() {
     info!("Reading {}...", fp);
 
     let mut key_type = KeyType::U64;
-    let (num_rows, mut data) = if fp.contains("uint64") {
+    let (num_rows, data) = if fp.contains("uint64") {
         load_data(&fp, DataType::UINT64)
     } else if fp.contains("uint32") {
         load_data(&fp, DataType::UINT32)
@@ -128,7 +129,9 @@ fn main() {
     };
 
     if matches.is_present("optimize") {
-        let results = optimizer::find_pareto_efficient_configs(&data, 10);
+        let results = dynamic!(optimizer::find_pareto_efficient_configs,
+                               data, 10);
+
         optimizer::RMIStatistics::display_table(&results);
 
         let nmspc_prefix = if matches.value_of("namespace").is_some() {
@@ -193,8 +196,8 @@ fn main() {
                     trace!("Training RMI {} with branching factor {}",
                            models, *branch_factor);
                     
-                    let mut loc_data = data.soft_copy();
-                    let trained_model = train(&mut loc_data, models, *branch_factor);
+                    let loc_data = data.soft_copy();
+                    let trained_model = dynamic!(train, loc_data, models, *branch_factor);
                     
                     let size_bs = rmi_lib::rmi_size(&trained_model);
                     
@@ -263,11 +266,13 @@ fn main() {
                     .unwrap();
         
                 let trained_model = match matches.value_of("bounded") {
-                    None => train(&mut data, models, branch_factor),
+                    None => dynamic!(train, data, models, branch_factor),
                     Some(s) => {
                         let line_size = s.parse::<usize>()
                             .expect("Line size must be a positive integer.");
-                        train_bounded(&mut data, models, branch_factor, line_size)
+                        let d_u64 = data.into_u64()
+                            .expect("Can only construct a bounded RMI on u64 data.");
+                        train_bounded(&d_u64, models, branch_factor, line_size)
                     }
                 };
                 trained_model
@@ -276,7 +281,7 @@ fn main() {
                 let max_size = max_size_str.parse::<usize>().unwrap();
                 info!("Constructing RMI with size less than {}", max_size);
 
-                let trained_model = rmi_lib::train_for_size(&mut data, max_size);
+                let trained_model = dynamic!(rmi_lib::train_for_size, data, max_size);
                 trained_model
             }
         };

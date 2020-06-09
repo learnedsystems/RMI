@@ -27,14 +27,12 @@ fn find_first_above<T: Copy>(data: &[Option<T>], idx: usize) -> Option<(usize, T
 
 // next_for_leaf[i] stores the (key index, key) pairs for the first key in the 
 // leaf model after leaf i. next_for_leaf[last leaf index] stores the maximum possible key.
-fn compute_next_for_leaf(num_leaf_models: u64,
-                         num_keys: usize,
-                         first_key_for_leaf: &[Option<(usize, ModelInput)>])
-                         -> Vec<(usize, ModelInput)> {
+fn compute_next_for_leaf<T: TrainingKey>(num_leaf_models: u64,
+                                        num_keys: usize,
+                                        first_key_for_leaf: &[Option<(usize, T)>])
+                                        -> Vec<(usize, T)> {
 
-    let witness = first_key_for_leaf.iter()
-        .filter(|x| x.is_some()).next().unwrap().unwrap().1;
-    let mut next_for_leaf = vec![(0,0.into()) ; num_leaf_models as usize];
+    let mut next_for_leaf = vec![(0, T::zero_value()) ; num_leaf_models as usize];
     let mut idx: usize = 0;
     while idx < num_leaf_models as usize {
         match find_first_above(&first_key_for_leaf, idx as usize) {
@@ -47,7 +45,7 @@ fn compute_next_for_leaf(num_leaf_models: u64,
             },
             None => {
                 for i in idx..num_leaf_models as usize {
-                    next_for_leaf[i] = (num_keys, witness.max_value());
+                    next_for_leaf[i] = (num_keys, T::max_value());
                 }
                 break;
             }
@@ -57,12 +55,12 @@ fn compute_next_for_leaf(num_leaf_models: u64,
     return next_for_leaf;
 }
 
-fn compute_prev_for_leaf(num_leaf_models: u64,
-                         last_key_for_leaf: &[Option<(usize, ModelInput)>])
-                         -> Vec<(usize, ModelInput)> {
+fn compute_prev_for_leaf<T: TrainingKey>(num_leaf_models: u64,
+                                        last_key_for_leaf: &[Option<(usize, T)>])
+                                        -> Vec<(usize, T)> {
     
-    let mut prev_for_leaf: Vec<(usize, ModelInput)>
-        = vec![(0, 0.into()) ; num_leaf_models as usize];
+    let mut prev_for_leaf: Vec<(usize, T)>
+        = vec![(0, T::zero_value()) ; num_leaf_models as usize];
     let mut idx: usize = num_leaf_models as usize - 1;
     while idx > 0 {
         match find_first_below(&last_key_for_leaf, idx as usize) {
@@ -82,21 +80,21 @@ fn compute_prev_for_leaf(num_leaf_models: u64,
 }
 
 
-pub struct LowerBoundCorrection {
-    first: Vec<Option<(usize, ModelInput)>>,
-    last: Vec<Option<(usize, ModelInput)>>,
-    next: Vec<(usize, ModelInput)>,
-    prev: Vec<(usize, ModelInput)>,
+pub struct LowerBoundCorrection<T> {
+    first: Vec<Option<(usize, T)>>,
+    last: Vec<Option<(usize, T)>>,
+    next: Vec<(usize, T)>,
+    prev: Vec<(usize, T)>,
     run_lengths: Vec<u64>
 }
 
-impl LowerBoundCorrection {
-    pub fn new<T>(pred_func: T, num_leaf_models: u64, data: &RMITrainingData) -> LowerBoundCorrection
-    where T: Fn(ModelInput) -> u64 {
+impl <T: TrainingKey> LowerBoundCorrection<T> {
+    pub fn new<F>(pred_func: F, num_leaf_models: u64, data: &RMITrainingData<T>) -> LowerBoundCorrection<T>
+    where F: Fn(T) -> u64 {
     
-        let mut first_key_for_leaf: Vec<Option<(usize, ModelInput)>>
+        let mut first_key_for_leaf: Vec<Option<(usize, T)>>
             = vec![None ; num_leaf_models as usize];
-        let mut last_key_for_leaf: Vec<Option<(usize, ModelInput)>>
+        let mut last_key_for_leaf: Vec<Option<(usize, T)>>
             = vec![None ; num_leaf_models as usize];
         let mut max_run_length: Vec<u64> = vec![0 ; num_leaf_models as usize];
         
@@ -138,15 +136,15 @@ impl LowerBoundCorrection {
         };
     }
     
-    pub fn first_key(&self, leaf_idx: usize) -> Option<ModelInput> {
+    pub fn first_key(&self, leaf_idx: usize) -> Option<T> {
         return self.first[leaf_idx].map(|x| x.1);
     }
     
-    pub fn last_key(&self, leaf_idx: usize) -> Option<ModelInput> {
+    pub fn last_key(&self, leaf_idx: usize) -> Option<T> {
         return self.last[leaf_idx].map(|x| x.1);
     }
 
-    pub fn next(&self, leaf_idx: usize) -> (usize, ModelInput) {
+    pub fn next(&self, leaf_idx: usize) -> (usize, T) {
         return self.next[leaf_idx];
     }
     
@@ -154,7 +152,7 @@ impl LowerBoundCorrection {
         return self.next[leaf_idx].0;
     }
     
-    pub fn prev_key(&self, leaf_idx: usize) -> ModelInput {
+    pub fn prev_key(&self, leaf_idx: usize) -> T {
         return self.prev[leaf_idx].1;
     }
 

@@ -17,13 +17,15 @@ pub struct BalancedRadixModel {
     high: bool,
 }
 
-fn chi2(data: &RMITrainingData, max_bin: u64, model: &BalancedRadixModel) -> f64 {
+fn chi2<T: TrainingKey>(data: &RMITrainingData<T>,
+                       max_bin: u64,
+                       model: &BalancedRadixModel) -> f64 {
     // compute the x^2 value of the distribution
     // induced by this model.
     let mut counts = vec![0; max_bin as usize];
 
-    for (x, _y) in data.iter() {
-        counts[model.predict_to_int(x) as usize] += 1;
+    for (x, _y) in data.iter_model_input() {
+        counts[model.predict_to_int(&x) as usize] += 1;
     }
 
     let expected = data.len() as f64 / max_bin as f64;
@@ -34,7 +36,7 @@ fn chi2(data: &RMITrainingData, max_bin: u64, model: &BalancedRadixModel) -> f64
         .sum();
 }
 
-fn bradix(data: &RMITrainingData, max_output: u64) -> BalancedRadixModel {
+fn bradix<T: TrainingKey>(data: &RMITrainingData<T>, max_output: u64) -> BalancedRadixModel {
     let bits = num_bits(max_output);
     let common_prefix = common_prefix_size(data);
     trace!("Bradix layer common prefix: {}", common_prefix);
@@ -83,7 +85,7 @@ fn bradix(data: &RMITrainingData, max_output: u64) -> BalancedRadixModel {
 }
 
 impl BalancedRadixModel {
-    pub fn new(data: &RMITrainingData) -> BalancedRadixModel {
+    pub fn new<T: TrainingKey>(data: &RMITrainingData<T>) -> BalancedRadixModel {
         if data.len() == 0 {
             return BalancedRadixModel {
                 params: (0, 0, 0),
@@ -98,7 +100,7 @@ impl BalancedRadixModel {
 }
 
 impl Model for BalancedRadixModel {
-    fn predict_to_int(&self, inp: ModelInput) -> u64 {
+    fn predict_to_int(&self, inp: &ModelInput) -> u64 {
         let (left_shift, num_bits, clamp) = self.params;
 
         let as_int: u64 = inp.as_int();

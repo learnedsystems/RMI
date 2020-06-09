@@ -332,7 +332,9 @@ impl fmt::Display for LayerParams {
     }
 }
 
-fn params_for_layer(layer_idx: usize, models: &[Box<dyn Model>]) -> LayerParams {
+fn params_for_layer(layer_idx: usize,
+                    models: &[Box<dyn Model>])
+                    -> LayerParams {
     let params_per_model = models[0].params().len();
     let params = models.iter().flat_map(|m| m.params()).collect();
     return LayerParams::new(layer_idx,
@@ -484,7 +486,7 @@ fn generate_code<T: Write>(
 
     if rmi.cache_fix.is_some() {
         let cfv: Vec<ModelParam> = rmi.cache_fix.as_ref().unwrap().1.iter()
-            .flat_map(|(mi, offset)| vec![mi.as_int().into(), (*offset).into()])
+            .flat_map(|(mi, offset)| vec![(*mi).into(), (*offset).into()])
             .collect();
         let cache_fix_params = LayerParams::new(
             layer_params.len(), true, 2, cfv

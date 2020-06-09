@@ -25,7 +25,7 @@ fn phi(x: f64) -> f64 {
     return 1.0 / (1.0 + exp1(-1.65451 * x));
 }
 
-fn ncdf(loc_data: &RMITrainingData) -> (f64, f64, f64) {
+fn ncdf<T: TrainingKey>(loc_data: &RMITrainingData<T>) -> (f64, f64, f64) {
     let mut scale = -f64::INFINITY;
     let mut mean = 0.0;
     let mut stdev = 0.0;
@@ -49,7 +49,7 @@ fn ncdf(loc_data: &RMITrainingData) -> (f64, f64, f64) {
     return (mean, stdev, scale);
 }
 
-fn lncdf(loc_data: &RMITrainingData) -> (f64, f64, f64) {
+fn lncdf<T: TrainingKey>(loc_data: &RMITrainingData<T>) -> (f64, f64, f64) {
     let mut scale = -f64::INFINITY;
     let mut mean = 0.0;
     let mut stdev = 0.0;
@@ -80,13 +80,13 @@ pub struct NormalModel {
 }
 
 impl NormalModel {
-    pub fn new(data: &RMITrainingData) -> NormalModel {
+    pub fn new<T: TrainingKey>(data: &RMITrainingData<T>) -> NormalModel {
         return NormalModel { params: ncdf(data) };
     }
 }
 
 impl Model for NormalModel {
-    fn predict_to_float(&self, inp: ModelInput) -> f64 {
+    fn predict_to_float(&self, inp: &ModelInput) -> f64 {
         let (mean, stdev, scale) = self.params;
         return phi((inp.as_float() - mean) / stdev) * scale;
     }
@@ -152,7 +152,7 @@ pub struct LogNormalModel {
 }
 
 impl LogNormalModel {
-    pub fn new(data: &RMITrainingData) -> LogNormalModel {
+    pub fn new<T: TrainingKey>(data: &RMITrainingData<T>) -> LogNormalModel {
         return LogNormalModel {
             params: lncdf(data),
         };
@@ -160,7 +160,7 @@ impl LogNormalModel {
 }
 
 impl Model for LogNormalModel {
-    fn predict_to_float(&self, inp: ModelInput) -> f64 {
+    fn predict_to_float(&self, inp: &ModelInput) -> f64 {
         let (mean, stdev, scale) = self.params;
         let data = inp.as_float();
         return phi((f64::max(data.ln(), 0.0) - mean) / stdev) * scale;

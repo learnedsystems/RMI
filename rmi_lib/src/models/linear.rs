@@ -58,7 +58,7 @@ fn slr<T: Iterator<Item = (f64, f64)>>(loc_data: T) -> (f64, f64) {
     return (alpha, beta);
 }
 
-fn loglinear_slr(data: &RMITrainingData) -> (f64, f64) {
+fn loglinear_slr<T: TrainingKey>(data: &RMITrainingData<T>) -> (f64, f64) {
     // log all of the outputs, omit any item that doesn't have a valid log
     let transformed_data: Vec<(f64, f64)> = data
         .iter()
@@ -76,7 +76,7 @@ pub struct LinearModel {
 }
 
 impl LinearModel {
-    pub fn new(data: &RMITrainingData) -> LinearModel {
+    pub fn new<T: TrainingKey>(data: &RMITrainingData<T>) -> LinearModel {
         let params = slr(data.iter()
                          .map(|(inp, offset)| (inp.as_float(), offset as f64)));
         return LinearModel { params };
@@ -84,7 +84,7 @@ impl LinearModel {
 }
 
 impl Model for LinearModel {
-    fn predict_to_float(&self, inp: ModelInput) -> f64 {
+    fn predict_to_float(&self, inp: &ModelInput) -> f64 {
         let (intercept, slope) = self.params;
         return slope.mul_add(inp.as_float(), intercept);
     }
@@ -167,7 +167,7 @@ fn exp1(inp: f64) -> f64 {
 }
 
 impl LogLinearModel {
-    pub fn new(data: &RMITrainingData) -> LogLinearModel {
+    pub fn new<T: TrainingKey>(data: &RMITrainingData<T>) -> LogLinearModel {
         return LogLinearModel {
             params: loglinear_slr(&data),
         };
@@ -175,7 +175,7 @@ impl LogLinearModel {
 }
 
 impl Model for LogLinearModel {
-    fn predict_to_float(&self, inp: ModelInput) -> f64 {
+    fn predict_to_float(&self, inp: &ModelInput) -> f64 {
         let (alpha, beta) = self.params;
         return exp1(beta.mul_add(inp.as_float(), alpha));
     }
@@ -237,7 +237,7 @@ pub struct RobustLinearModel {
 
 
 impl RobustLinearModel {
-    pub fn new(data: &RMITrainingData) -> RobustLinearModel {
+    pub fn new<T: TrainingKey>(data: &RMITrainingData<T>) -> RobustLinearModel {
         let total_items = data.len();
         if data.len() == 0 {
             return RobustLinearModel {
@@ -262,7 +262,7 @@ impl RobustLinearModel {
 }
 
 impl Model for RobustLinearModel {
-    fn predict_to_float(&self, inp: ModelInput) -> f64 {
+    fn predict_to_float(&self, inp: &ModelInput) -> f64 {
         let (alpha, beta) = self.params;
         return beta.mul_add(inp.as_float(), alpha);
     }

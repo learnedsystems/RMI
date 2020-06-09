@@ -8,19 +8,16 @@
  
 
 mod balanced_radix;
-mod bottom_up_plr;
 mod cubic_spline;
 mod histogram;
 mod linear;
 mod linear_spline;
 mod normal;
-mod pgm;
 mod radix;
 mod stdlib;
 mod utils;
 
 pub use balanced_radix::BalancedRadixModel;
-pub use bottom_up_plr::BottomUpPLR;
 pub use cubic_spline::CubicSplineModel;
 pub use histogram::EquidepthHistogramModel;
 pub use linear::LinearModel;
@@ -29,7 +26,6 @@ pub use linear::LogLinearModel;
 pub use linear_spline::LinearSplineModel;
 pub use normal::LogNormalModel;
 pub use normal::NormalModel;
-pub use pgm::PGM;
 pub use radix::RadixModel;
 pub use radix::RadixTable;
 pub use stdlib::StdFunctions;
@@ -62,93 +58,115 @@ impl KeyType {
             KeyType::U64 => ModelDataType::Int,
             KeyType::U128 => ModelDataType::Int128,
             KeyType::F64 => ModelDataType::Float
-            
         }
     }
 }
 
+pub trait TrainingKey: PartialEq + Copy + Send + Sync + std::fmt::Debug + 'static {
+    fn minus_epsilon(&self) -> Self;
+    fn zero_value() -> Self;
+    fn plus_epsilon(&self) -> Self;
+    fn max_value() -> Self;
+
+    fn as_float(&self) -> f64;
+    fn as_uint(&self) -> u64;
+    
+    fn to_model_input(&self) -> ModelInput;
+}
+
+impl TrainingKey for u64 {
+    fn minus_epsilon(&self) -> Self { *self - 1 }
+    fn zero_value() -> Self { 0 }
+    fn plus_epsilon(&self) -> Self { *self + 1 }
+    fn max_value() -> Self { std::u64::MAX }
+
+    fn as_float(&self) -> f64 { *self as f64 }
+    fn as_uint(&self) -> u64 { *self }
+    
+    fn to_model_input(&self) -> ModelInput { (*self).into() }
+}
+
+impl TrainingKey for u32 {
+    fn minus_epsilon(&self) -> Self { *self - 1 }
+    fn zero_value() -> Self { 0 }
+    fn plus_epsilon(&self) -> Self { *self + 1 }
+    fn max_value() -> Self { std::u32::MAX }
+
+    fn as_float(&self) -> f64 { *self as f64 }
+    fn as_uint(&self) -> u64 { *self as u64 }
+    
+    fn to_model_input(&self) -> ModelInput { (*self).into() }
+}
+
+impl TrainingKey for f64 {
+    fn minus_epsilon(&self) -> Self { *self - std::f64::EPSILON }
+    fn zero_value() -> Self { 0.0 }
+    fn plus_epsilon(&self) -> Self { *self + std::f64::EPSILON }
+    fn max_value() -> Self { std::f64::MAX }
+
+    fn as_float(&self) -> f64 { *self }
+    fn as_uint(&self) -> u64 { *self as u64 }
+    
+    fn to_model_input(&self) -> ModelInput { (*self).into() }
+}
+
 pub trait RMITrainingDataIteratorProvider: Send + Sync {
+    type InpType: TrainingKey;
+    
     fn len(&self) -> usize;
-    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (ModelInput, usize)> + '_>;
+    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (Self::InpType, usize)> + '_>;
     fn key_type(&self) -> KeyType;
-    fn get(&self, idx: usize) -> Option<(ModelInput, usize)> {
+    fn get(&self, idx: usize) -> Option<(Self::InpType, usize)> {
         return Some(self.cdf_iter().nth(idx).unwrap());
     }
 }
 
-impl RMITrainingDataIteratorProvider for Vec<(u64, usize)> {
+impl <K: TrainingKey> RMITrainingDataIteratorProvider for Vec<(K, usize)> {
+    type InpType = K;
     fn len(&self) -> usize {
         return Vec::len(&self);
     }
 
-    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (ModelInput, usize)> + '_> {
+    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (Self::InpType, usize)> + '_> {
         return Box::new(self.iter()
                         .cloned()
                         .map(|(key, offset)| (key.into(), offset)));
     }
 
     fn key_type(&self) -> KeyType { return KeyType::U64; }
-    fn get(&self, idx: usize) -> Option<(ModelInput, usize)> {
+    fn get(&self, idx: usize) -> Option<(Self::InpType, usize)> {
         self.as_slice().get(idx).map(|(key, offset)| ((*key).into(), *offset))
     }
 }
 
-impl RMITrainingDataIteratorProvider for Vec<(f64, usize)> {
-    fn len(&self) -> usize {
-        return Vec::len(&self);
-    }
 
-    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (ModelInput, usize)> + '_> {
-        return Box::new(self.iter()
-                        .cloned()
-                        .map(|(key, offset)| (key.into(), offset)));
-    }
-
-    fn key_type(&self) -> KeyType { return KeyType::F64; }
-    fn get(&self, idx: usize) -> Option<(ModelInput, usize)> {
-        self.as_slice().get(idx).map(|(key, offset)| ((*key).into(), *offset))
-    }
-}
-
-impl RMITrainingDataIteratorProvider for Vec<(ModelInput, usize)> {
-    fn len(&self) -> usize {
-        return Vec::len(&self);
-    }
-
-    fn cdf_iter(&self) -> Box<dyn Iterator<Item = (ModelInput, usize)> + '_> {
-        return Box::new(self.iter().cloned());
-    }
-
-    fn key_type(&self) -> KeyType {
-        match self.first().unwrap().0 {
-            ModelInput::Int(_) => KeyType::U64,
-            ModelInput::Float(_) => KeyType::F64
-        }
-    }
-    fn get(&self, idx: usize) -> Option<(ModelInput, usize)> {
-        self.as_slice().get(idx).cloned()
-    }
-}
-
-
-struct FixDupsIter<T> {
+struct FixDupsIter<K, T: Iterator<Item=(K, usize)>> {
     iter: T,
-    last_item: Option<(ModelInput, usize)>
+    last_item: Option<(K, usize)>
 }
 
-impl <T> FixDupsIter<T> {
-    fn new(iter: T) -> FixDupsIter<T> {
-        return FixDupsIter { iter: iter, last_item: Some((0.into(), 0)) };
+impl <K, T: Iterator<Item=(K, usize)>> FixDupsIter<K, T> {
+    fn new(iter: T) -> FixDupsIter<K, T> {
+        return FixDupsIter { iter: iter, last_item: None };
     }
 }
 
-impl <T> Iterator for FixDupsIter<T> where
-    T: Iterator<Item=(ModelInput, usize)> {
-    type Item = (ModelInput, usize);
+impl <K, T> Iterator for FixDupsIter<K, T> where
+    T: Iterator<Item=(K, usize)>,
+    K: TrainingKey {
+    type Item = (K, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.last_item {
-            None => None,
+            None => {
+                match self.iter.next() {
+                    None => { return None },
+                    Some(itm) => {
+                        self.last_item = Some(itm);
+                        return Some(itm);
+                    }
+                }
+            },
             Some(last) => {
                 match self.iter.next() {
                     Some(nxt) => {
@@ -166,24 +184,33 @@ impl <T> Iterator for FixDupsIter<T> where
     }
 }
 
-struct DedupIter<T> {
+struct DedupIter<K, T: Iterator<Item=(K, usize)>> {
     iter: T,
-    last_item: Option<(ModelInput, usize)>
+    last_item: Option<(K, usize)>
 }
 
-impl <T> DedupIter<T> {
-    fn new(iter: T) -> DedupIter<T> {
-        return DedupIter { iter: iter, last_item: Some((0.into(), 0)) };
+impl <K, T: Iterator<Item=(K, usize)>> DedupIter<K, T> {
+    fn new(iter: T) -> DedupIter<K, T> {
+        return DedupIter { iter: iter, last_item: None };
     }
 }
 
-impl <T> Iterator for DedupIter<T> where
-    T: Iterator<Item=(ModelInput, usize)> {
-    type Item = (ModelInput, usize);
+impl <K, T> Iterator for DedupIter<K, T> where
+    T: Iterator<Item=(K, usize)>,
+    K: TrainingKey {
+    type Item = (K, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.last_item {
-            None => None,
+            None => {
+                match self.iter.next() {
+                    None => { return None; }
+                    Some(nxt) => {
+                        self.last_item = Some(nxt);
+                        return Some(nxt)
+                    }
+                }
+            },
             Some(last) => {
                 loop {
                     match self.iter.next() {
@@ -203,8 +230,8 @@ impl <T> Iterator for DedupIter<T> where
     }
 }
 
-pub struct RMITrainingData {
-    iterable: Arc<Box<dyn RMITrainingDataIteratorProvider>>,
+pub struct RMITrainingData<T> {
+    iterable: Arc<Box<dyn RMITrainingDataIteratorProvider<InpType=T>>>,
     scale: f64
 }
 
@@ -222,17 +249,14 @@ macro_rules! map_scale {
     }}
 }
 
-impl RMITrainingData {
-    pub fn new(iterable: Box<dyn RMITrainingDataIteratorProvider>) -> RMITrainingData {
+impl <T: TrainingKey> RMITrainingData<T> {
+    pub fn new(iterable: Box<dyn RMITrainingDataIteratorProvider<InpType=T>>)
+               -> RMITrainingData<T> {
         return RMITrainingData { iterable: Arc::new(iterable), scale: 1.0 };
     }
 
-    pub fn from_vec(data: Vec<(u64, usize)>) -> RMITrainingData {
-        return RMITrainingData::new(Box::new(data));
-    }
-
-    pub fn empty() -> RMITrainingData {
-        return RMITrainingData::from_vec(vec![]);
+    pub fn empty() -> RMITrainingData<T> {
+        return RMITrainingData::<T>::new(Box::new(vec![]));
     }
 
     pub fn len(&self) -> usize { return self.iterable.len(); }
@@ -241,19 +265,25 @@ impl RMITrainingData {
         self.scale = scale;
     }
 
-    pub fn get(&self, idx: usize) -> (ModelInput, usize) {
+    pub fn get(&self, idx: usize) -> (T, usize) {
         return map_scale!(self, self.iterable.get(idx)).unwrap();
     }
 
-    pub fn get_key(&self, idx: usize) -> ModelInput {
+    pub fn get_key(&self, idx: usize) -> T {
         return map_scale!(self, self.iterable.get(idx)).unwrap().0
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (ModelInput, usize)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (T, usize)> + '_ {
         map_scale!(self, FixDupsIter::new(self.iterable.cdf_iter()))
     }
 
-    pub fn iter_unique(&self) -> impl Iterator<Item = (ModelInput, usize)> + '_ {
+    pub fn iter_model_input(&self) -> impl Iterator<Item = (ModelInput, usize)> + '_ {
+        return map_scale!(self, FixDupsIter::new(self.iterable.cdf_iter()))
+            .map(|(k, o)| (k.to_model_input(), o));
+    }
+
+
+    pub fn iter_unique(&self) -> impl Iterator<Item = (T, usize)> + '_ {
         map_scale!(self, DedupIter::new(self.iterable.cdf_iter()))
     }
 
@@ -262,7 +292,7 @@ impl RMITrainingData {
     // https://docs.rs/superslice/1.0.0/src/superslice/lib.rs.html
     // which was copyright 2017 Alkis Evlogimenos under the Apache License.
     pub fn lower_bound_by<F>(&self, f: F) -> usize
-    where F: Fn((ModelInput, usize)) -> Ordering {
+    where F: Fn((T, usize)) -> Ordering {
         let mut size = self.len();
         if size == 0 { return 0; }
         
@@ -278,7 +308,7 @@ impl RMITrainingData {
         base + (cmp == Ordering::Less) as usize
     }
     
-    pub fn soft_copy(&self) -> RMITrainingData {
+    pub fn soft_copy(&self) -> RMITrainingData<T> {
         return RMITrainingData {
             scale: self.scale,
             iterable: Arc::clone(&self.iterable)
@@ -293,6 +323,49 @@ impl RMITrainingData {
 impl RMITrainingDataIteratorProvider for RMITrainingDataIteratorProviderWrapper {
 
 }*/
+
+
+/*impl PartialEq for ModelInput {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            ModelInput::Int(x) => {
+                match other {
+                    ModelInput::Int(y) => x == y,
+                    ModelInput::Float(_) => false
+                }
+            }
+
+            ModelInput::Float(x) => {
+                match other {
+                    ModelInput::Int(_) => false,
+                    ModelInput::Float(y) => x == y // exact equality is intentional
+                }
+            }
+        }
+    }
+}
+
+impl Eq for ModelInput { }
+
+impl PartialOrd for ModelInput {
+    fn partial_cmp(&self, other: &ModelInput) -> Option<Ordering> {
+        match self {
+            ModelInput::Int(x) => {
+                match other {
+                    ModelInput::Int(y) => x.partial_cmp(y),
+                    ModelInput::Float(_) => None
+                }
+            }
+            ModelInput::Float(x) => {
+                match other {
+                    ModelInput::Int(_) => None,
+                    ModelInput::Float(y) => x.partial_cmp(y) 
+                }
+            }
+        }
+    }
+}*/
+
 
 
 #[derive(Clone, Copy, Debug)]
@@ -417,7 +490,6 @@ impl From<f64> for ModelInput {
         ModelInput::Float(f)
     }
 }
-
 pub enum ModelDataType {
     Int,
     Int128,
@@ -656,11 +728,11 @@ pub enum ModelRestriction {
 }
 
 pub trait Model: Sync + Send {
-    fn predict_to_float(&self, inp: ModelInput) -> f64 {
+    fn predict_to_float(&self, inp: &ModelInput) -> f64 {
         return self.predict_to_int(inp) as f64;
     }
 
-    fn predict_to_int(&self, inp: ModelInput) -> u64 {
+    fn predict_to_int(&self, inp: &ModelInput) -> u64 {
         return f64::max(0.0, self.predict_to_float(inp).floor()) as u64;
     }
 

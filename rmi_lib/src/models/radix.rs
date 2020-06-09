@@ -15,7 +15,7 @@ pub struct RadixModel {
 }
 
 impl RadixModel {
-    pub fn new(data: &RMITrainingData) -> RadixModel {
+    pub fn new<T: TrainingKey>(data: &RMITrainingData<T>) -> RadixModel {
         if data.len() == 0 {
             return RadixModel { params: (0, 0) };
         }
@@ -40,7 +40,7 @@ impl RadixModel {
 }
 
 impl Model for RadixModel {
-    fn predict_to_int(&self, inp: ModelInput) -> u64 {
+    fn predict_to_int(&self, inp: &ModelInput) -> u64 {
         let (left_shift, num_bits) = self.params;
 
         let as_int: u64 = inp.as_int();
@@ -87,12 +87,12 @@ pub struct RadixTable {
 }
 
 impl RadixTable {
-    pub fn new(data: &RMITrainingData, bits: u8) -> RadixTable {
+    pub fn new<T: TrainingKey>(data: &RMITrainingData<T>, bits: u8) -> RadixTable {
         let prefix = common_prefix_size(data);
         let mut hint_table: Vec<u32> = vec![0 ; 1 << bits];
 
         let mut last_radix = 0;
-        for (inp, y) in data.iter() {
+        for (inp, y) in data.iter_model_input() {
             let x = inp.as_int();
             let num_bits = if prefix + bits > 64 { 0 } else { 64 - (prefix + bits) };
             let current_radix = ((x << prefix) >> prefix) >> num_bits;
@@ -121,7 +121,7 @@ impl RadixTable {
 }
 
 impl Model for RadixTable {
-    fn predict_to_int(&self, inp: ModelInput) -> u64 {
+    fn predict_to_int(&self, inp: &ModelInput) -> u64 {
         let as_int: u64 = inp.as_int();
         let prefix = self.prefix_bits;
         let bits = self.table_bits;

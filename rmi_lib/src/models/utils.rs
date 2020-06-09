@@ -22,11 +22,11 @@ pub fn num_bits(largest_target: u64) -> u8 {
     return nbits;
 }
 
-pub fn common_prefix_size(data: &RMITrainingData) -> u8 {
+pub fn common_prefix_size<T: TrainingKey>(data: &RMITrainingData<T>) -> u8 {
     let mut any_ones: u64 = 0;
     let mut no_ones: u64 = !0;
 
-    for (x, _y) in data.iter() {
+    for (x, _y) in data.iter_model_input() {
         any_ones |= x.as_int();
         no_ones &= x.as_int();
     }
@@ -110,7 +110,7 @@ macro_rules! plr_with {
 
         let mut last_x = -1.0;
         for (inp, y) in $data.iter() {
-            let x = inp.as_float();
+            let x = inp.to_model_input().as_float();
             if (x - last_x).abs() < std::f64::EPSILON {
                 continue;
             } else {
@@ -134,7 +134,9 @@ macro_rules! plr_with {
     }}
 }
 
-pub fn plr(data: &RMITrainingData, delta: f64, optimal: bool) -> (Vec<u64>, Vec<f64>) {
+pub fn plr<T: TrainingKey>(data: &RMITrainingData<T>,
+                          delta: f64,
+                          optimal: bool) -> (Vec<u64>, Vec<f64>) {
     let segments = if optimal {
         plr_with!(OptimalPLR, delta, data)
     } else {
@@ -145,7 +147,7 @@ pub fn plr(data: &RMITrainingData, delta: f64, optimal: bool) -> (Vec<u64>, Vec<
         .map(|seg| seg.start as u64)
         .collect();
 
-    points[0] = u64::min(points[0], data.iter().next().unwrap().0.as_int());
+    points[0] = u64::min(points[0], data.iter().next().unwrap().0.to_model_input().as_int());
     
     let coeffs = segments.iter()
         .flat_map(|seg| vec![seg.slope, seg.intercept])
