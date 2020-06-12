@@ -117,7 +117,6 @@ inline double linear(double alpha, double beta, double inp) {
         self.params = (constant as f64, 0.0);
         return true;
     }
-            
 }
 
 #[cfg(test)]

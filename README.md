@@ -23,12 +23,12 @@ Many more details can be found in [the original paper](https://arxiv.org/abs/171
 
 To use the reference implementation, clone this repository and [install Rust](https://rustup.rs/).
 
-The reference RMI implementation is a *compiler.* It takes a dataset as input, and produces C/C++ source files as outputs. The data input file must contain:
+The reference RMI implementation is a *compiler.* It takes a dataset as input, and produces C/C++ source files as outputs. The data input file must be a binary file containing:
 
-1. The number of items, as a 64-bit unsigned integer
-2. The data items, either 32-bit or 64-bit unsigned integers.
+1. The number of items, as a 64-bit unsigned integer (little endian)
+2. The data items, either 32-bit or 64-bit unsigned integers (little endian)
 
-If the input file contains 32-bit integers, the filename must end with `uint32`. If the input file contains 64-bit integers, the filename must end with `uint64`.
+If the input file contains 32-bit integers, the filename must end with `uint32`. If the input file contains 64-bit integers, the filename must end with `uint64`. If the input file contains 64-bit floats, the filename must end with `float64`.
 
 In addition to the input dataset, you must also provide a model structure. For example, to build a 2-layer RMI on the data file `books_200M_uint32` (available from [the Harvard Dataverse](https://dataverse.harvard.edu/file.xhtml?persistentId=doi:10.7910/DVN/JGVF9A/MZZUP2&version=4.0)) with a branching factor of 100, we could run:
 
@@ -36,7 +36,11 @@ In addition to the input dataset, you must also provide a model structure. For e
 cargo run --release -- books_200M_uint32 my_first_rmi linear,linear 100
 ```
 
-This command would produce C/C++ source files in the current directory. The C/C++ sources contain a few publicly-exposed fields:
+Logging useful diagnostic information can be enabled by setting the `RUST_LOG` environmental variable to `trace`: `export RUST_LOG=trace`.
+
+
+## Generated code
+The RMI generator  produces C/C++ source files in the current directory. The command directly above, for example, produces the following output. The C/C++ sources contain a few publicly-exposed fields:
 
 ```C++
 #include <cstddef>
@@ -65,7 +69,7 @@ uint64_t lookup(uint64_t key);
 ```
 
 
-Logging useful diagnostic information can be enabled by setting the `RUST_LOG` environmental variable to `trace`: `export RUST_LOG=trace`.
+## RMI Layers and Tuning
 
 Currently, the following types of RMI layers are supported:
 
@@ -78,8 +82,6 @@ Currently, the following types of RMI layers are supported:
 * `radix`, eliminates common prefixes and returns a fixed number of significant bits based on the branching factor
 * `bradix`, same as radix, but attempts to choose the number of bits based on balancing the dataset
 * `histogram`, partitions the data into several even-sized blocks (based on the branching factor)
-* `plr`, performs piecewise linear regression with a fixed error bound (64)
-* `pgm`, constructs a [piecewise geometric model (PGM) index](https://arxiv.org/abs/1910.06169)
 
 Tuning an RMI is critical to getting good performance. A good place to start is a `cubic` layer followed by a large linear layer, for example: `cubic,linear 262144`. For automatic tuning, try the RMI optimizer using the `--optimize` flag:
 
@@ -92,6 +94,6 @@ By default, the optimizer will use 4 threads. If you have a big machine, conside
 
 This work is freely available under the terms of the MIT license.
 
-### Contributors
+## Contributors
 
 * [Ryan Marcus](https://rmarcus.info)
