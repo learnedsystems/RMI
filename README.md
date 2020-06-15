@@ -28,7 +28,7 @@ The reference RMI implementation is a *compiler.* It takes a dataset as input, a
 1. The number of items, as a 64-bit unsigned integer (little endian)
 2. The data items, either 32-bit or 64-bit unsigned integers (little endian)
 
-If the input file contains 32-bit integers, the filename must end with `uint32`. If the input file contains 64-bit integers, the filename must end with `uint64`. If the input file contains 64-bit floats, the filename must end with `float64`.
+If the input file contains 32-bit integers, the filename must end with `uint32`. If the input file contains 64-bit integers, the filename must end with `uint64`. If the input file contains 64-bit floats, the filename must end with `f64`.
 
 In addition to the input dataset, you must also provide a model structure. For example, to build a 2-layer RMI on the data file `books_200M_uint32` (available from [the Harvard Dataverse](https://dataverse.harvard.edu/file.xhtml?persistentId=doi:10.7910/DVN/JGVF9A/MZZUP2&version=4.0)) with a branching factor of 100, we could run:
 
