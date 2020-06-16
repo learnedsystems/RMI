@@ -92,6 +92,9 @@ fn main() {
         .arg(Arg::with_name("disable-parallel-training")
              .long("disable-parallel-training")
              .help("disables training multiple RMIs in parallel"))
+        .arg(Arg::with_name("zero-build-time")
+             .long("zero-build-time")
+             .help("zero out the model build time field"))
         .arg(Arg::with_name("optimize")
              .long("optimize")
              .value_name("file")
@@ -197,7 +200,7 @@ fn main() {
                            models, *branch_factor);
                     
                     let loc_data = data.soft_copy();
-                    let trained_model = dynamic!(train, loc_data, models, *branch_factor);
+                    let mut trained_model = dynamic!(train, loc_data, models, *branch_factor);
                     
                     let size_bs = rmi_lib::rmi_size(&trained_model);
                     
@@ -216,6 +219,10 @@ fn main() {
                         "size binary search" => size_bs,
                         "namespace" => namespace.clone()
                     };
+
+                    if matches.is_present("zero-build-time") {
+                        trained_model.build_time = 0;
+                    }
                     
                     if let Some(nmspc) = namespace {
                         rmi_lib::output_rmi(
@@ -255,7 +262,7 @@ fn main() {
 
     } else if matches.value_of("namespace").is_some() {
         let namespace = matches.value_of("namespace").unwrap().to_string();
-        let trained_model = match matches.value_of("max-size") {
+        let mut trained_model = match matches.value_of("max-size") {
             None => {
                 // assume they gave a model spec 
                 let models = matches.value_of("models").unwrap();
@@ -314,6 +321,10 @@ fn main() {
         );
         
         if !matches.is_present("no-code") {
+            if matches.is_present("zero-build-time") {
+                trained_model.build_time = 0;
+            }
+
             rmi_lib::output_rmi(
                 &namespace,
                 trained_model,
