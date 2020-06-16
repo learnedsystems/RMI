@@ -140,9 +140,7 @@ impl Model for RadixTable {
     }
 
     fn params(&self) -> Vec<ModelParam> {
-        let mut new_params = self.hint_table.clone();
-        new_params.insert(0, self.prefix_bits as u32);
-        return vec![new_params.into()];
+        return vec![self.hint_table.clone().into()];
     }
 
     fn code(&self) -> String {
@@ -155,9 +153,8 @@ impl Model for RadixTable {
         return format!(
             "
 inline uint64_t radix_table(const uint32_t* table, const uint64_t inp) {{
-    uint32_t prefix_length = table[0];
-    return (table+1)[((inp << prefix_length) >> prefix_length) >> (64 - {})];
-}}", num_bits
+    return table[((inp << {0}) >> {0}) >> {1}];
+}}", self.prefix_bits, num_bits
         );
     }
 
