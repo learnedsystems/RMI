@@ -6,7 +6,6 @@
 // < end copyright > 
  
 use crate::models::*;
-use plr::regression::{OptimalPLR, GreedyPLR};
 use superslice::*;
 use log::*;
 
@@ -103,59 +102,6 @@ pub fn radix_index(points: &[u64], num_bits: u8) -> Vec<u64> {
     return radix_index;
 }
 
-macro_rules! plr_with {
-    ($plr: ty, $delta: ident, $data: ident) => {{
-        let mut plr = <$plr>::new($delta);
-        let mut segments = Vec::new();
-
-        let mut last_x = -1.0;
-        for (inp, y) in $data.iter() {
-            let x = inp.to_model_input().as_float();
-            if (x - last_x).abs() < std::f64::EPSILON {
-                continue;
-            } else {
-                last_x = x;
-            }
-            
-            if let Some(seg) = plr.process(x, y as f64) {
-                assert!(! f64::is_nan(seg.slope));
-                assert!(! f64::is_nan(seg.intercept));
-                segments.push(seg);
-            }            
-        }
-        
-        if let Some(seg) = plr.finish() {
-            assert!(! f64::is_nan(seg.slope));
-            assert!(! f64::is_nan(seg.intercept));
-            segments.push(seg);
-        }
-
-        segments
-    }}
-}
-
-pub fn plr<T: TrainingKey>(data: &RMITrainingData<T>,
-                          delta: f64,
-                          optimal: bool) -> (Vec<u64>, Vec<f64>) {
-    let segments = if optimal {
-        plr_with!(OptimalPLR, delta, data)
-    } else {
-        plr_with!(GreedyPLR, delta, data)
-    };
-
-    let mut points: Vec<u64> = segments.iter()
-        .map(|seg| seg.start as u64)
-        .collect();
-
-    points[0] = u64::min(points[0], data.iter().next().unwrap().0.to_model_input().as_int());
-    
-    let coeffs = segments.iter()
-        .flat_map(|seg| vec![seg.slope, seg.intercept])
-        .collect();
-
-    
-    return (points, coeffs);
-}
 
 
 #[cfg(test)]

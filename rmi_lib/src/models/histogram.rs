@@ -7,12 +7,17 @@
  
  
 use crate::models::*;
-use crate::models::utils::{plr, radix_index};
+use crate::models::utils::radix_index;
 use superslice::*;
 use log::*;
 
-/*
-fn equidepth_histogram(data: &ModelData) -> Vec<u64> {
+pub struct EquidepthHistogramModel {
+    params: Vec<u64>,
+    radix: Vec<u64>
+}
+
+
+fn equidepth_histogram<T: TrainingKey>(data: &RMITrainingData<T>) -> Vec<u64> {
     assert!(data.len() > 0);
     
     let mut splits: Vec<u64> = Vec::new();
@@ -24,29 +29,14 @@ fn equidepth_histogram(data: &ModelData) -> Vec<u64> {
     
     for bin_idx in 0..num_bins {
         let start_idx = bin_idx * items_per_bin;
-        let start_val = data.get(start_idx).0 as u64;
+        let start_val = data.get_key(start_idx).as_uint();
         splits.push(start_val);
     }
 
     return splits;
 }
-*/
 
-fn linear_norm_histogram<T: TrainingKey>(data: &RMITrainingData<T>) -> Vec<u64> {
-    assert!(data.len() > 0);
-    
-    let num_bins = data.get(data.len()-1).1 as usize;
 
-    let (points, _coeffs) = plr(data, 0.005, data.len() < 10000);
-    trace!("Histogram found {} points", points.len());
-    assert_eq!(points.len(), num_bins + 1);
-    return points;
-}
-
-pub struct EquidepthHistogramModel {
-    params: Vec<u64>,
-    radix: Vec<u64>
-}
 
 impl EquidepthHistogramModel {
     pub fn new<T: TrainingKey>(data: &RMITrainingData<T>) -> EquidepthHistogramModel {
@@ -54,7 +44,7 @@ impl EquidepthHistogramModel {
             return EquidepthHistogramModel { params: Vec::new(), radix: Vec::new() };
         }
 
-        let params = linear_norm_histogram(data);
+        let params = equidepth_histogram(data);
         let radix = radix_index(&params, 20);
         return EquidepthHistogramModel {
             params, radix
