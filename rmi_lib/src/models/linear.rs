@@ -17,15 +17,15 @@ fn slr<T: Iterator<Item = (f64, f64)>>(loc_data: T) -> (f64, f64) {
     let mut mean_x = 0.0;
     let mut mean_y = 0.0;
     let mut c = 0.0;
-    let mut n = 0;
+    let mut n: u64 = 0;
     let mut m2 = 0.0;
 
     let mut data_size = 0;
     for (x, y) in loc_data {
         n += 1;
         let dx = x - mean_x;
-        mean_x += dx / f64::from(n);
-        mean_y += (y - mean_y) / f64::from(n);
+        mean_x += dx / (n as f64);
+        mean_y += (y - mean_y) / (n as f64);
         c += dx * (y - mean_y);
 
         let dx2 = x - mean_x;
@@ -43,9 +43,9 @@ fn slr<T: Iterator<Item = (f64, f64)>>(loc_data: T) -> (f64, f64) {
     }
 
 
-    let cov = c / f64::from(n - 1);
-    let var = m2 / f64::from(n - 1);
-    assert!(var >= 0.0);
+    let cov = c / ((n - 1) as f64);
+    let var = m2 / ((n - 1) as f64);
+    assert!(var >= 0.0, "variance of model with {} data items was negative", n);
 
     if var == 0.0 {
         // variance is zero. pick the mean (only) value.
