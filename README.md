@@ -99,6 +99,20 @@ The optimizer will output a table, with each row representing an RMI configurati
 * `MaxLg2`: the maximum log2 error of the model (the maximum number of binary search steps required to find any key within the range predicted by the RMI)
 * `Size (b)`: the in-memory size of the RMI, in bytes.
 
+## Citation and license
+
+If you use this RMI implementation in your academic research, please cite the CDFShop paper:
+
+```
+Ryan Marcus, Emily Zhang, and Tim Kraska. 2020. CDFShop: Exploring and Optimizing Learned Index Structures. In Proceedings of the 2020 ACM SIGMOD International Conference on Management of Data (SIGMOD '20). Association for Computing Machinery, New York, NY, USA, 2789–2792. DOI:https://doi.org/10.1145/3318464.3384706
+```
+
+If you are comparing a new index structure to learned approaches, or evaluating a new learned approach, please take a look at our [benchmark for learned index structures](https://learned.systems/sosd.
+
+For RMIs and learned index structures in general, one should cite the original paper:
+```
+Tim Kraska, Alex Beutel, Ed H. Chi, Jeffrey Dean, and Neoklis Polyzotis. 2018. The Case for Learned Index Structures. In Proceedings of the 2018 International Conference on Management of Data (SIGMOD '18). Association for Computing Machinery, New York, NY, USA, 489–504. DOI:https://doi.org/10.1145/3183713.3196909
+```
 
 This work is freely available under the terms of the MIT license.
 
