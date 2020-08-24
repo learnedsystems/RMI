@@ -91,6 +91,14 @@ cargo run --release -- --optimize optimizer_out.json books_200M_uint64
 
 By default, the optimizer will use 4 threads. If you have a big machine, consider increasing this with the `--threads` option.
 
+The optimizer will output a table, with each row representing an RMI configuration. By default, the optimizer selects a small set of possible configurations that are heuristically selected to cover the Pareto front. Each column contains:
+
+* `Models`: the model types used at each level of the RMI
+* `Branch`: the branching factor of the RMI (number of leaf models)
+* `AvgLg2`: the average log2 error of the model (which approximates the number of binary search steps required to find a particular key within a range predicted by the RMI)
+* `MaxLg2`: the maximum log2 error of the model (the maximum number of binary search steps required to find any key within the range predicted by the RMI)
+* `Size (b)`: the in-memory size of the RMI, in bytes.
+
 
 This work is freely available under the terms of the MIT license.
 
