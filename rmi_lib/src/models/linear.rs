@@ -236,7 +236,7 @@ pub struct RobustLinearModel {
 
 
 impl RobustLinearModel {
-    pub fn new<T: TrainingKey>(data: &RMITrainingData<T>) -> RobustLinearModel {
+    pub fn new<T: TrainingKey>(data: &RMITrainingData<T>, bnd_factor: f64) -> RobustLinearModel {
         let total_items = data.len();
         if data.len() == 0 {
             return RobustLinearModel {
@@ -244,7 +244,10 @@ impl RobustLinearModel {
             };
         }
         
-        let bnd = usize::max(1, ((total_items as f64) * 0.0001) as usize);
+        let bnd = usize::max(1, ((total_items as f64) * bnd_factor) as usize);
+        if bnd*2 + 1 < data.len() {
+            return RobustLinearModel { params: slr(data.iter().map(|(inp, offset)| (inp.as_float(), offset as f64))) };
+        }
         assert!(bnd*2+1 < data.len());
         
         let iter = data.iter()

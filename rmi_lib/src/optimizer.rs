@@ -17,8 +17,8 @@ fn top_only_layers() -> Vec<&'static str> {
         None => vec!["radix", "radix18", "radix22", "robust_linear"],
         Some(x) => {
             match x.to_str().unwrap() {
-                "fast" => vec!["robust_linear"],
-                "memory" => vec!["radix", "radix18", "radix22", "robust_linear"],
+                "fast" => vec!["robust_linear4"],
+                "memory" => vec!["radix", "radix18", "radix22", "robust_linear4", "robust_linear5", "robust_linear3", "robust_linear2"],
                 "disk" => vec!["radix", "radix18", "radix22", "robust_linear",
                                "normal", "lognormal", "loglinear"],
                 _ => panic!("Invalid optimizer profile {}", x.to_str().unwrap())
