@@ -99,6 +99,9 @@ fn main() {
              .long("optimize")
              .value_name("file")
              .help("Search for Pareto efficient RMI configurations. Specify the name of the output file."))
+        .arg(Arg::with_name("use-mmap")
+             .long("use-mmap")
+             .help("Use mmap to back large structure. This should significantly improve initial latency."))
         .get_matches();
 
     // set the max number of threads to 4 by default, otherwise Rayon goes
@@ -110,6 +113,7 @@ fn main() {
     
     let fp = matches.value_of("input").unwrap();
 
+    let use_mmap = matches.is_present("use-mmap");
 
     let data_dir = matches.value_of("data-path").unwrap_or("rmi_data");
     
@@ -230,7 +234,8 @@ fn main() {
                             trained_model,
                             data_dir,
                             key_type,
-                            true).unwrap();
+                            true,
+                            use_mmap).unwrap();
                         
                     }
                     
@@ -330,7 +335,8 @@ fn main() {
                 trained_model,
                 data_dir,
                 key_type,
-                !no_errors).unwrap();
+                !no_errors,
+                use_mmap).unwrap();
         } else {
             trace!("Skipping code generation due to CLI flag");
         }

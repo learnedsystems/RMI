@@ -121,39 +121,67 @@ impl LayerParams {
         };
     }
     
-    fn to_decl<T: Write>(&self, target: &mut T) -> Result<(), std::io::Error> {
+    fn to_decl<T: Write>(&self, target: &mut T, use_mmap: bool) -> Result<(), std::io::Error> {
         match self {
             LayerParams::Constant(_, _) => {
                 panic!("Cannot forward-declare constants");
             }
 
             LayerParams::Array(idx, _, params) => {
-                if !self.requires_malloc()  {
-                    let num_items: usize = params.iter().map(|p| p.len()).sum();
-                    writeln!(
-                        target,
-                        "{} {}[{}];",
-                        params[0].c_type(),
-                        array_name!(idx),
-                        num_items
-                    )?;
-                } else { 
-                    writeln!(
-                        target,
-                        "{}* {};",
-                        params[0].c_type(),
-                        array_name!(idx)
-                    )?;
+                if !use_mmap {
+                  if !self.requires_malloc()  {
+                      let num_items: usize = params.iter().map(|p| p.len()).sum();
+                      writeln!(
+                          target,
+                          "{} {}[{}];",
+                          params[0].c_type(),
+                          array_name!(idx),
+                          num_items
+                      )?;
+                  } else { 
+                      writeln!(
+                          target,
+                          "{}* {};",
+                          params[0].c_type(),
+                          array_name!(idx)
+                      )?;
+                  }
+                } else { // use_mmap
+                  writeln!(
+                      target,
+                      "{}* {};",
+                      params[0].c_type(),
+                      array_name!(idx)
+                  )?;
+                  writeln!(
+                      target,
+                      "KeyArray<{}>* {}_MANAGER;",
+                      params[0].c_type(),
+                      array_name!(idx)
+                  )?;
                 }
             },
 
             LayerParams::MixedArray(idx, _, _) => {
                 assert!(self.requires_malloc());
-                writeln!(
-                    target,
-                    "char* {};",
-                    array_name!(idx)
-                )?;
+                if !use_mmap {
+                  writeln!(
+                      target,
+                      "char* {};",
+                      array_name!(idx)
+                  )?;
+                } else { // use_mmap
+                  writeln!(
+                      target,
+                      "char* {};",
+                      array_name!(idx)
+                  )?;
+                  writeln!(
+                      target,
+                      "KeyArray<char>* {}_MANAGER;",
+                      array_name!(idx)
+                  )?;
+                }
             }
         };
 
@@ -454,7 +482,8 @@ fn generate_code<T: Write>(
     namespace: &str,
     rmi: TrainedRMI,
     data_dir: &str,
-    key_type: KeyType
+    key_type: KeyType,
+    use_mmap: bool
 ) -> Result<(), std::io::Error> {
     // construct the code for the model parameters.
     let mut layer_params: Vec<LayerParams> = rmi.rmi
@@ -500,6 +529,11 @@ fn generate_code<T: Write>(
         trace!("{}", lps);
     }
 
+    if use_mmap {
+      writeln!(data_output, "#include <memory>")?;    
+      writeln!(data_output, "#include \"mmap_struct.h\"")?;    
+    }
+
     writeln!(data_output, "namespace {} {{", namespace)?;    
     
     let mut read_code = Vec::new();
@@ -519,22 +553,32 @@ fn generate_code<T: Write>(
                 let mut bw = BufWriter::new(f);
                 
                 lp.write_to(&mut bw)?; // write to data file
-                lp.to_decl(data_output)?; // write to source code
+                lp.to_decl(data_output, use_mmap)?; // write to source code
                 
-                read_code.push("  {".to_string());
-                read_code.push(format!("    std::ifstream infile(std::filesystem::path(dataPath) / \"{ns}_{fn}\", std::ios::in | std::ios::binary);",
-                                       ns=namespace, fn=array_name!(idx)));
-                read_code.push("    if (!infile.good()) return false;".to_string());
-                if lp.requires_malloc() {
-                    read_code.push(format!("    {} = ({}*) malloc({});",
-                                           array_name!(idx), lp.pointer_type(), lp.size()));
-                    read_code.push(format!("    if ({} == NULL) return false;",
-                                           array_name!(idx)));
+                if !use_mmap {
+                  read_code.push("  {".to_string());
+                  read_code.push(format!("    std::ifstream infile(std::filesystem::path(dataPath) / \"{ns}_{fn}\", std::ios::in | std::ios::binary);",
+                                         ns=namespace, fn=array_name!(idx)));
+                  read_code.push("    if (!infile.good()) return false;".to_string());
+                  if lp.requires_malloc() {
+                      read_code.push(format!("    {} = ({}*) malloc({});",
+                                             array_name!(idx), lp.pointer_type(), lp.size()));
+                      read_code.push(format!("    if ({} == NULL) return false;",
+                                             array_name!(idx)));
+                  }
+                  read_code.push(format!("    infile.read((char*){fn}, {size});",
+                                         fn=array_name!(idx), size=lp.size()));
+                  read_code.push("    if (!infile.good()) return false;".to_string());
+                  read_code.push("  }".to_string());
+                } else {
+                  read_code.push("  {".to_string());
+                  read_code.push(format!("    std::filesystem::path p = std::filesystem::path(dataPath) / \"{ns}_{fn}\";",
+                                         ns=namespace, fn=array_name!(idx)));
+                  read_code.push(format!("    {fn}_MANAGER = new KeyArray<char>(p.c_str(), {size});",
+                                         fn=array_name!(idx), size=lp.size()));
+                  read_code.push(format!("    {fn} = {fn}_MANAGER->raw_pointer();", fn=array_name!(idx)));
+                  read_code.push("  }".to_string());
                 }
-                read_code.push(format!("    infile.read((char*){fn}, {size});",
-                                       fn=array_name!(idx), size=lp.size()));
-                read_code.push("    if (!infile.good()) return false;".to_string());
-                read_code.push("  }".to_string());
             }
         }
     }
@@ -549,7 +593,11 @@ fn generate_code<T: Write>(
     for lp in layer_params.iter() {
         if !lp.requires_malloc() { continue; }
         if let LayerParams::Array(idx, _, _) | LayerParams::MixedArray(idx, _, _) = lp {
-            free_code.push(format!("    free({});", array_name!(idx)));
+            if !use_mmap {
+              free_code.push(format!("    free({});", array_name!(idx)));
+            } else {
+              free_code.push(format!("    delete {}_MANAGER;", array_name!(idx)));
+            }
             continue;
         }
         panic!();
@@ -758,7 +806,8 @@ pub fn output_rmi(namespace: &str,
                   mut trained_model: TrainedRMI,
                   data_dir: &str,
                   key_type: KeyType,
-                  include_errors: bool) -> Result<(), std::io::Error> {
+                  include_errors: bool,
+                  use_mmap: bool) -> Result<(), std::io::Error> {
     
     let f1 = File::create(format!("{}.cpp", namespace)).expect("Could not write RMI CPP file");
     let mut bw1 = BufWriter::new(f1);
@@ -781,7 +830,8 @@ pub fn output_rmi(namespace: &str,
         namespace,
         trained_model,
         data_dir,
-        key_type
+        key_type,
+        use_mmap
     );
         
     
