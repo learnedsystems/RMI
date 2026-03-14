@@ -113,6 +113,10 @@ inline double linear(double alpha, double beta, double inp) {
         return String::from("linear");
     }
 
+    fn model_name(&self) -> &'static str {
+        "linear"
+    }
+
     fn set_to_constant_model(&mut self, constant: u64) -> bool {
         self.params = (constant as f64, 0.0);
         return true;
@@ -202,6 +206,10 @@ inline double loglinear(double alpha, double beta, double inp) {
     fn function_name(&self) -> String {
         return String::from("loglinear");
     }
+
+    fn model_name(&self) -> &'static str {
+        "loglinear"
+    }
     fn standard_functions(&self) -> HashSet<StdFunctions> {
         let mut to_r = HashSet::new();
         to_r.insert(StdFunctions::EXP1);
@@ -285,9 +293,13 @@ inline double linear(double alpha, double beta, double inp) {
 }",
         );
     }
-    
+
     fn function_name(&self) -> String {
         return String::from("linear");
+    }
+
+    fn model_name(&self) -> &'static str {
+        "robust_linear"
     }
 
     fn set_to_constant_model(&mut self, constant: u64) -> bool {

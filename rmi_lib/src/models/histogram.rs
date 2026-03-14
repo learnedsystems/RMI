@@ -99,6 +99,10 @@ inline uint64_t ed_histogram(const uint64_t length,
     }
 
     fn function_name(&self) -> String { return String::from("ed_histogram"); }
+
+    fn model_name(&self) -> &'static str {
+        "histogram"
+    }
     fn restriction(&self) -> ModelRestriction { return ModelRestriction::MustBeTop; }
     fn needs_bounds_check(&self) -> bool { return false; }
 }

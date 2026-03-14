@@ -76,6 +76,10 @@ inline double linear(double alpha, double beta, double inp) {
         return String::from("linear");
     }
 
+    fn model_name(&self) -> &'static str {
+        "linear_spline"
+    }
+
     fn set_to_constant_model(&mut self, constant: u64) -> bool {
         self.params = (constant as f64, 0.0);
         return true;

@@ -118,6 +118,10 @@ inline double ncdf(double mean, double stdev, double scale, double inp) {
     fn function_name(&self) -> String {
         return String::from("ncdf");
     }
+
+    fn model_name(&self) -> &'static str {
+        "normal"
+    }
     fn standard_functions(&self) -> HashSet<StdFunctions> {
         let mut to_r = HashSet::new();
         to_r.insert(StdFunctions::EXP1);
@@ -192,6 +196,10 @@ inline double lncdf(double mean, double stdev, double scale, double inp) {
 
     fn function_name(&self) -> String {
         return String::from("lncdf");
+    }
+
+    fn model_name(&self) -> &'static str {
+        "lognormal"
     }
     fn standard_functions(&self) -> HashSet<StdFunctions> {
         let mut to_r = HashSet::new();

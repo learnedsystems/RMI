@@ -72,6 +72,10 @@ inline uint64_t radix(uint64_t prefix_length, uint64_t bits, uint64_t inp) {
     fn function_name(&self) -> String {
         return String::from("radix");
     }
+
+    fn model_name(&self) -> &'static str {
+        "radix"
+    }
     fn needs_bounds_check(&self) -> bool {
         return false;
     }
@@ -160,6 +164,17 @@ inline uint64_t radix_table(const uint32_t* table, const uint64_t inp) {{
 
     fn function_name(&self) -> String {
         return String::from("radix_table");
+    }
+
+    fn model_name(&self) -> &'static str {
+        match self.table_bits {
+            8 => "radix8",
+            18 => "radix18",
+            22 => "radix22",
+            26 => "radix26",
+            28 => "radix28",
+            _ => "radix_table",
+        }
     }
     fn needs_bounds_check(&self) -> bool {
         return false;

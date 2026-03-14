@@ -16,6 +16,7 @@ mod normal;
 mod radix;
 mod stdlib;
 mod utils;
+mod optimal_pla;
 
 pub use balanced_radix::BalancedRadixModel;
 pub use cubic_spline::CubicSplineModel;
@@ -29,6 +30,7 @@ pub use normal::NormalModel;
 pub use radix::RadixModel;
 pub use radix::RadixTable;
 pub use stdlib::StdFunctions;
+pub use optimal_pla::OptimalPLAModel;
 
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -49,6 +51,15 @@ impl KeyType {
             KeyType::U64 => "uint64_t",
             KeyType::F64 => "double",
             KeyType::U128 => "uint128_t"
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            KeyType::U32 => "u32",
+            KeyType::U64 => "u64",
+            KeyType::F64 => "f64",
+            KeyType::U128 => "u128",
         }
     }
 
@@ -490,6 +501,7 @@ impl From<f64> for ModelInput {
         ModelInput::Float(f)
     }
 }
+#[derive(Clone, Copy, Debug)]
 pub enum ModelDataType {
     Int,
     Int128,
@@ -743,6 +755,7 @@ pub trait Model: Sync + Send {
 
     fn code(&self) -> String;
     fn function_name(&self) -> String;
+    fn model_name(&self) -> &'static str;
 
     fn standard_functions(&self) -> HashSet<StdFunctions> {
         return HashSet::new();

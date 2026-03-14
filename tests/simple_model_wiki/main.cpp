@@ -1,7 +1,7 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
-#include "rmi.h"
+#include "../common/rmi_learned_index.h"
 
 int main() {
   // load the data
@@ -19,7 +19,8 @@ int main() {
 
   std::cout << "Data loaded." << std::endl;
 
-  std::cout << "RMI status: " << rmi::load("rmi_data") << std::endl;
+  RMILearnedIndex learned_index;
+  std::cout << "RMI status: " << learned_index.Load("rmi_data") << std::endl;
 
   size_t err;
   
@@ -29,7 +30,7 @@ int main() {
       std::distance(data.begin(), std::lower_bound(data.begin(),
                                                    data.end(),
                                                    lookup));
-    uint64_t rmi_guess = rmi::lookup(lookup, &err);
+    uint64_t rmi_guess = learned_index.Lookup(lookup, &err);
     
     uint64_t diff = (rmi_guess > true_index ? rmi_guess - true_index : true_index - rmi_guess);
     if (diff > err) {
@@ -41,6 +42,6 @@ int main() {
     }
   }
   
-  rmi::cleanup();
+  learned_index.Cleanup();
   exit(0);
 }

@@ -9,13 +9,14 @@
 
 use crate::models::Model;
 use crate::models::*;
+use crate::manifest::{self, CacheFixMetadata, LayerMetadata, LayerStorage, ParameterDescriptor, ParamValue};
 use bytesize::ByteSize;
 use log::*;
 use std::collections::HashSet;
 use std::io::Write;
 use std::str;
 use crate::train::TrainedRMI;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::BufWriter;
 use std::path::Path;
 use std::fmt;
@@ -208,6 +209,39 @@ impl LayerParams {
         };
     }
 
+    fn num_models(&self) -> usize {
+        match self {
+            LayerParams::Constant(_, _) => 1,
+            LayerParams::Array(_, ppm, params) |
+            LayerParams::MixedArray(_, ppm, params) => {
+                assert_eq!(params.len() % ppm, 0);
+                params.len() / ppm
+            }
+        }
+    }
+
+    fn sample_params(&self) -> &[ModelParam] {
+        match self {
+            LayerParams::Constant(_, params) => params.as_slice(),
+            LayerParams::Array(_, ppm, params) |
+            LayerParams::MixedArray(_, ppm, params) => &params[0..*ppm],
+        }
+    }
+
+    fn storage_descriptor(&self, namespace: &str) -> LayerStorage {
+        match self {
+            LayerParams::Constant(_, params) => LayerStorage::Constant {
+                values: params.iter().map(ParamValue::from).collect(),
+            },
+            LayerParams::Array(idx, _, _) => LayerStorage::Array {
+                file: format!("{}_{}", namespace, array_name!(*idx)),
+            },
+            LayerParams::MixedArray(idx, _, _) => LayerStorage::MixedArray {
+                file: format!("{}_{}", namespace, array_name!(*idx)),
+            },
+        }
+    }
+
     fn size(&self) -> usize {
         return self.params().iter().map(|p| p.size()).sum();
     }
@@ -376,14 +410,36 @@ pub fn rmi_size(rmi: &TrainedRMI) -> u64 {
     // compute the RMI size (used in the header, compute here before consuming)
     let mut num_total_bytes = 0;
     for layer in rmi.rmi.iter() {
-        let model_on_this_layer_size: usize = layer[0].params().iter().map(|p| p.size()).sum();
-        
-        // assume all models on this layer have the same size
-        num_total_bytes += model_on_this_layer_size * layer.len();
+        if layer[0].model_name() == "optimal_pla" {
+            // optimal_pla leaf models can have different segment counts, so account for
+            // each model's arrays independently.
+            num_total_bytes += layer
+                .iter()
+                .map(|model| model.params().iter().map(|p| p.size()).sum::<usize>())
+                .sum::<usize>();
+        } else {
+            let model_on_this_layer_size: usize = layer[0].params().iter().map(|p| p.size()).sum();
+
+            // assume all models on this layer have the same size
+            num_total_bytes += model_on_this_layer_size * layer.len();
+        }
     }
 
     if !rmi.last_layer_max_l1s.is_empty() {
-        num_total_bytes += rmi.rmi.last().unwrap().len() * 8;
+        let leaf_model_name = rmi
+            .rmi
+            .last()
+            .and_then(|leaf_models| leaf_models.first())
+            .map(|leaf| leaf.model_name())
+            .unwrap_or("");
+
+        if leaf_model_name == "optimal_pla" {
+            // For optimal_pla leaves, the configured epsilon acts as the bounded error,
+            // so account for one shared error value instead of per-leaf L1 entries.
+            num_total_bytes += std::mem::size_of::<u64>();
+        } else {
+            num_total_bytes += rmi.rmi.last().unwrap().len() * 8;
+        }
     }
 
     if rmi.cache_fix.is_some() {
@@ -462,8 +518,14 @@ fn generate_code<T: Write>(
         .enumerate()
         .map(|(layer_idx, models)| params_for_layer(layer_idx, models))
         .collect();
-    
+
     let report_last_layer_errors = !rmi.last_layer_max_l1s.is_empty();
+
+    let namespace_dir = Path::new(data_dir).join(namespace);
+    if !namespace_dir.exists() {
+        fs::create_dir_all(&namespace_dir)
+            .expect("Unable to create namespace-specific RMI data directory");
+    }
 
     let mut report_lle: Vec<u8> = Vec::new();
     if report_last_layer_errors {
@@ -512,7 +574,7 @@ fn generate_code<T: Write>(
             
             LayerParams::Array(idx, _, _) |
             LayerParams::MixedArray(idx, _, _) => {
-                let data_path = Path::new(&data_dir)
+                let data_path = namespace_dir
                     .join(format!("{}_{}", namespace, array_name!(idx)));
                 let f = File::create(data_path)
                     .expect("Could not write data file to RMI directory");
@@ -522,8 +584,13 @@ fn generate_code<T: Write>(
                 lp.to_decl(data_output)?; // write to source code
                 
                 read_code.push("  {".to_string());
-                read_code.push(format!("    std::ifstream infile(std::filesystem::path(dataPath) / \"{ns}_{fn}\", std::ios::in | std::ios::binary);",
+                read_code.push(format!("    auto primary = std::filesystem::path(dataPath) / \"{ns}\" / \"{ns}_{fn}\";",
                                        ns=namespace, fn=array_name!(idx)));
+                read_code.push(format!("    std::ifstream infile(primary, std::ios::in | std::ios::binary);"));
+                read_code.push("    if (!infile.good()) {".to_string());
+                read_code.push(format!("      infile.open(std::filesystem::path(dataPath) / \"{ns}_{fn}\", std::ios::in | std::ios::binary);",
+                                       ns=namespace, fn=array_name!(idx)));
+                read_code.push("    }".to_string());
                 read_code.push("    if (!infile.good()) return false;".to_string());
                 if lp.requires_malloc() {
                     read_code.push(format!("    {} = ({}*) malloc({});",
@@ -538,6 +605,41 @@ fn generate_code<T: Write>(
             }
         }
     }
+    let manifest_layers: Vec<LayerMetadata> = layer_params
+        .iter()
+        .take(rmi.rmi.len())
+        .zip(rmi.rmi.iter())
+        .map(|(lp, models)| LayerMetadata {
+            index: lp.index(),
+            model_type: models[0].model_name().to_string(),
+            num_models: lp.num_models(),
+            params_per_model: lp.params_per_model(),
+            parameters: lp.sample_params().iter().map(ParameterDescriptor::from).collect(),
+            storage: lp.storage_descriptor(namespace),
+        })
+        .collect();
+
+    let cache_fix_meta = if let Some((line_size, points)) = &rmi.cache_fix {
+        let idx = layer_params.len() - 1;
+        Some(CacheFixMetadata {
+            file: format!("{}_{}", namespace, array_name!(idx)),
+            line_size: *line_size,
+            points: points.len(),
+        })
+    } else {
+        None
+    };
+
+    manifest::write_metadata(
+        namespace,
+        data_dir,
+        key_type,
+        &rmi,
+        report_last_layer_errors,
+        manifest_layers,
+        cache_fix_meta,
+    ).expect("Unable to write RMI manifest");
+
     read_code.push("  return true;".to_string());
     read_code.push("}".to_string());
 
@@ -757,17 +859,23 @@ inline size_t FCLAMP(double inp, double bound) {{
 pub fn output_rmi(namespace: &str,
                   mut trained_model: TrainedRMI,
                   data_dir: &str,
+                  output_dir: &str,
                   key_type: KeyType,
                   include_errors: bool) -> Result<(), std::io::Error> {
-    
-    let f1 = File::create(format!("{}.cpp", namespace)).expect("Could not write RMI CPP file");
+
+    let output_dir = Path::new(output_dir);
+    fs::create_dir_all(output_dir)?;
+
+    let f1_path = output_dir.join(format!("{}.cpp", namespace));
+    let f1 = File::create(&f1_path).expect("Could not write RMI CPP file");
     let mut bw1 = BufWriter::new(f1);
-    
-    let f2 =
-        File::create(format!("{}_data.h", namespace)).expect("Could not write RMI data file");
+
+    let f2_path = output_dir.join(format!("{}_data.h", namespace));
+    let f2 = File::create(&f2_path).expect("Could not write RMI data file");
     let mut bw2 = BufWriter::new(f2);
-    
-    let f3 = File::create(format!("{}.h", namespace)).expect("Could not write RMI header file");
+
+    let f3_path = output_dir.join(format!("{}.h", namespace));
+    let f3 = File::create(&f3_path).expect("Could not write RMI header file");
     let mut bw3 = BufWriter::new(f3);
 
     if !include_errors {

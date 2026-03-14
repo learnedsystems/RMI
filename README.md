@@ -82,6 +82,8 @@ Currently, the following types of RMI layers are supported:
 * `radix`, eliminates common prefixes and returns a fixed number of significant bits based on the branching factor
 * `bradix`, same as radix, but attempts to choose the number of bits based on balancing the dataset
 * `histogram`, partitions the data into several even-sized blocks (based on the branching factor)
+* `optimal_pla`, a piecewise linear approximation leaf that stitches together short linear segments with a bounded per-segment error
+  * configure epsilon per layer using `optimal_pla:<N>` (for example `linear,optimal_pla:32`), or pass `--epsilon <N>` to apply to plain `optimal_pla` layers in CLI experiments
 
 Tuning an RMI is critical to getting good performance. A good place to start is a `cubic` layer followed by a large linear layer, for example: `cubic,linear 262144`. For automatic tuning, try the RMI optimizer using the `--optimize` flag:
 

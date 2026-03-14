@@ -181,6 +181,10 @@ inline double cubic(double a, double b, double c, double d, double x) {
     fn function_name(&self) -> String {
         return String::from("cubic");
     }
+
+    fn model_name(&self) -> &'static str {
+        "cubic"
+    }
     fn needs_bounds_check(&self) -> bool {
         return false;
     }

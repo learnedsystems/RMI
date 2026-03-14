@@ -161,6 +161,10 @@ inline uint64_t bradix_clamp_low(uint64_t prefix_length,
         };
     }
 
+    fn model_name(&self) -> &'static str {
+        "bradix"
+    }
+
     fn needs_bounds_check(&self) -> bool {
         return false;
     }
