@@ -119,3 +119,4 @@ This work is freely available under the terms of the MIT license.
 ## Contributors
 
 * [Ryan Marcus](https://rmarcus.info)
+* [Richard Barnes](https://richard.science)
