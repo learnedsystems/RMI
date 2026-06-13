@@ -177,7 +177,7 @@ impl <K, T> Iterator for FixDupsIter<K, T> where
                             return Some(nxt);
                         }
                     }
-                    None => { self.last_item.take() }
+                    None => { None }
                 }
             }
         }
