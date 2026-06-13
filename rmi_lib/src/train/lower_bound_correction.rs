@@ -124,6 +124,15 @@ impl <T: TrainingKey> LowerBoundCorrection<T> {
             last_key_for_leaf[target] = Some((y, x));
         }
 
+        // Flush the final run.  The loop above only commits a run to
+        // `max_run_length` when it sees a transition, so the last run -- and the
+        // only run in a single-run dataset -- would otherwise never be recorded,
+        // making `longest_run` under-report (returning 0 for single-run data).
+        max_run_length[last_target] = u64::max(
+            max_run_length[last_target],
+            current_run_length
+        );
+
         let next_for_leaf = compute_next_for_leaf(num_leaf_models, data.len(), &first_key_for_leaf);
         let prev_for_leaf = compute_prev_for_leaf(num_leaf_models, &last_key_for_leaf);
         
@@ -158,5 +167,34 @@ impl <T: TrainingKey> LowerBoundCorrection<T> {
 
     pub fn longest_run(&self, leaf_idx: usize) -> u64 {
         return self.run_lengths[leaf_idx];
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Regression: a single-run dataset (every entry shares one key, so the
+    // run-length loop never sees a transition) must still report the full run
+    // length.  Before the final-run flush, `longest_run` returned 0 here,
+    // because a run is only committed to `max_run_length` on a transition.
+    //
+    // All iterated entries fall in one run, so `longest_run(0)` must equal the
+    // number of entries the trainer iterates.  We derive the expected count
+    // from `data.iter()` rather than hard-coding it, since `FixDupsIter` adds a
+    // trailing replay of the last element.
+    #[test]
+    fn single_run_reports_full_length() {
+        let pairs: Vec<(u64, usize)> = vec![(5, 0), (5, 1), (5, 2)];
+        let data = RMITrainingData::<u64>::new(Box::new(pairs));
+        let expected = data.iter().count() as u64;
+        assert!(expected > 0, "test setup: dataset must be non-empty");
+
+        let lbc = LowerBoundCorrection::new(|k: u64| k >> 60, 16, &data);
+        assert_eq!(
+            lbc.longest_run(0),
+            expected,
+            "single-run dataset should report longest_run equal to its iterated length"
+        );
     }
 }
