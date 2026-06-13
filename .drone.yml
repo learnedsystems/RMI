@@ -3,6 +3,12 @@ type: docker
 name: default
 
 steps:
+  - name: unit-tests
+    image: rust:latest
+    commands:
+      - cargo test
+      - cargo test -p rmi_lib
+
   - name: test
     image: rust:latest
     volumes:

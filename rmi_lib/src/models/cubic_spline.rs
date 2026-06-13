@@ -198,55 +198,59 @@ mod tests {
 
     #[test]
     fn test_cubic() {
-        let md = ModelData::IntKeyToIntPos(vec![(1, 2), (2, 3), (3, 8), (4, 20)]);
+        let md: RMITrainingData<u64> =
+            RMITrainingData::new(Box::new(vec![(1, 2), (2, 3), (3, 8), (4, 20)]));
 
         let cubic_mod = CubicSplineModel::new(&md);
 
-        assert_abs_diff_eq!(cubic_mod.predict_to_float(1.into()), 2.0, epsilon = 0.5);
-        assert_abs_diff_eq!(cubic_mod.predict_to_float(4.into()), 20.0, epsilon = 0.5);
+        assert_abs_diff_eq!(cubic_mod.predict_to_float(&1u64.into()), 2.0, epsilon = 0.5);
+        assert_abs_diff_eq!(cubic_mod.predict_to_float(&4u64.into()), 20.0, epsilon = 0.5);
     }
 
     #[test]
     fn test_cubic2() {
-        let md = ModelData::IntKeyToIntPos(vec![(1, 2), (2, 3), (3, 8), (4, 20), (5, 80)]);
+        let md: RMITrainingData<u64> =
+            RMITrainingData::new(Box::new(vec![(1, 2), (2, 3), (3, 8), (4, 20), (5, 80)]));
 
         let cubic_mod = CubicSplineModel::new(&md);
 
-        assert_abs_diff_eq!(cubic_mod.predict_to_float(1.into()), 2.0, epsilon = 0.5);
-        assert_abs_diff_eq!(cubic_mod.predict_to_float(5.into()), 80.0, epsilon = 0.5);
+        assert_abs_diff_eq!(cubic_mod.predict_to_float(&1u64.into()), 2.0, epsilon = 0.5);
+        assert_abs_diff_eq!(cubic_mod.predict_to_float(&5u64.into()), 80.0, epsilon = 0.5);
     }
 
     #[test]
     fn test_cubic_dup() {
-        let md = ModelData::IntKeyToIntPos(vec![(1, 2), (1, 2), (3, 8), (4, 20), (5, 80)]);
+        let md: RMITrainingData<u64> =
+            RMITrainingData::new(Box::new(vec![(1, 2), (1, 2), (3, 8), (4, 20), (5, 80)]));
 
         let cubic_mod = CubicSplineModel::new(&md);
 
-        assert_abs_diff_eq!(cubic_mod.predict_to_float(1.into()), 2.0, epsilon = 0.5);
-        assert_abs_diff_eq!(cubic_mod.predict_to_float(5.into()), 80.0, epsilon = 0.5);
+        assert_abs_diff_eq!(cubic_mod.predict_to_float(&1u64.into()), 2.0, epsilon = 0.5);
+        assert_abs_diff_eq!(cubic_mod.predict_to_float(&5u64.into()), 80.0, epsilon = 0.5);
     }
 
     #[test]
     fn test_cubic_all_dup() {
-        let md = ModelData::IntKeyToIntPos(vec![(1, 2), (1, 2), (1, 2)]);
+        let md: RMITrainingData<u64> =
+            RMITrainingData::new(Box::new(vec![(1, 2), (1, 2), (1, 2)]));
 
         let cubic_mod = CubicSplineModel::new(&md);
 
-        assert_abs_diff_eq!(cubic_mod.predict_to_float(1.into()), 2.0, epsilon = 0.5);
+        assert_abs_diff_eq!(cubic_mod.predict_to_float(&1u64.into()), 2.0, epsilon = 0.5);
     }
 
     #[test]
     fn test_linear_spline_single() {
-        let md = ModelData::IntKeyToIntPos(vec![(1, 2)]);
+        let md: RMITrainingData<u64> = RMITrainingData::new(Box::new(vec![(1, 2)]));
 
         let cubic_mod = CubicSplineModel::new(&md);
 
-        assert_eq!(cubic_mod.predict_to_int(1.into()), 2);
+        assert_eq!(cubic_mod.predict_to_int(&1u64.into()), 2);
     }
 
     #[test]
     fn test_empty() {
-        CubicSplineModel::new(&ModelData::empty());
+        CubicSplineModel::new(&RMITrainingData::<u64>::empty());
     }
 
 }

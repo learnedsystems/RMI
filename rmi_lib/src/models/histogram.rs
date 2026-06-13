@@ -109,26 +109,29 @@ mod tests {
     
     #[test]
     fn test_ed_hist1() {
-        let mut test_data: Vec<(u64, u64)> = Vec::new();
+        let mut test_data: Vec<(u64, usize)> = Vec::new();
 
-        for i in 0..1000 {
-            test_data.push((i*3, i/3));
+        for i in 0..1000u64 {
+            test_data.push((i * 3, (i / 3) as usize));
         }
-        
-        let md = ModelData::IntKeyToIntPos(test_data);
+
+        let md: RMITrainingData<u64> = RMITrainingData::new(Box::new(test_data));
 
         let ed_mod = EquidepthHistogramModel::new(&md);
 
-        assert_eq!(ed_mod.predict_to_int((0).into()), 0);
-        assert_eq!(ed_mod.predict_to_int((1*3).into()), 0);
-        assert_eq!(ed_mod.predict_to_int((4*3).into()), 1);
-        assert_eq!(ed_mod.predict_to_int((500*3).into()), 166);
-        assert_eq!(ed_mod.predict_to_int((5000*3).into()), 333);
+        assert_eq!(ed_mod.predict_to_int(&0u64.into()), 0);
+        assert_eq!(ed_mod.predict_to_int(&(1u64 * 3).into()), 0);
+        assert_eq!(ed_mod.predict_to_int(&(4u64 * 3).into()), 1);
+        assert_eq!(ed_mod.predict_to_int(&(500u64 * 3).into()), 166);
+        // A key past all training data maps to the last bin. The equidepth
+        // histogram has `num_bins` = the final offset (333), so bin indices run
+        // 0..=num_bins-1; the maximum prediction is 332.
+        assert_eq!(ed_mod.predict_to_int(&(5000u64 * 3).into()), 332);
     }
 
     #[test]
     fn test_empty() {
-        EquidepthHistogramModel::new(&ModelData::empty());
+        EquidepthHistogramModel::new(&RMITrainingData::<u64>::empty());
     }
 
 }

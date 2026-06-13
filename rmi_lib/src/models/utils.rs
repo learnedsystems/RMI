@@ -109,18 +109,18 @@ mod tests {
   
   #[test]
   fn test_common_prefix1() {
-    let data = ModelData::IntKeyToIntPos(vec![
+    let data: RMITrainingData<u64> = RMITrainingData::new(Box::new(vec![
       (1, 0), (4, 4), (8, 8)
-    ]);
+    ]));
 
     assert_eq!(common_prefix_size(&data), 64-4);
   }
 
   #[test]
   fn test_common_prefix2() {
-    let data = ModelData::IntKeyToIntPos(vec![
+    let data: RMITrainingData<u64> = RMITrainingData::new(Box::new(vec![
       (1, 0), (8, 1), (9, 4), (12, 8)
-    ]);
+    ]));
 
     assert_eq!(common_prefix_size(&data), 64-4);
   }
