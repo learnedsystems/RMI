@@ -132,17 +132,18 @@ mod ncdf_tests {
 
     #[test]
     fn test_ncdf1() {
-        let md = ModelData::IntKeyToIntPos(vec![(1, 1), (2, 3), (3, 5)]);
+        let md: RMITrainingData<u64> =
+            RMITrainingData::new(Box::new(vec![(1, 1), (2, 3), (3, 5)]));
 
         let ncdf_mod = NormalModel::new(&md);
 
-        assert_eq!(ncdf_mod.predict_to_int(2.into()), 2);
-        assert_eq!(ncdf_mod.predict_to_int(1.into()), 0);
+        assert_eq!(ncdf_mod.predict_to_int(&2u64.into()), 2);
+        assert_eq!(ncdf_mod.predict_to_int(&1u64.into()), 0);
     }
 
     #[test]
     fn test_empty() {
-        NormalModel::new(&ModelData::empty());
+        NormalModel::new(&RMITrainingData::<u64>::empty());
     }
 
 }
@@ -207,17 +208,18 @@ mod lncdf_tests {
 
     #[test]
     fn test_lncdf1() {
-        let md = ModelData::IntKeyToIntPos(vec![(1, 1), (2, 2), (3, 20)]);
+        let md: RMITrainingData<u64> =
+            RMITrainingData::new(Box::new(vec![(1, 1), (2, 2), (3, 20)]));
 
         let lncdf_mod = LogNormalModel::new(&md);
 
-        assert_eq!(lncdf_mod.predict_to_int(2.into()), 11);
-        assert_eq!(lncdf_mod.predict_to_int(1.into()), 2);
+        assert_eq!(lncdf_mod.predict_to_int(&2u64.into()), 11);
+        assert_eq!(lncdf_mod.predict_to_int(&1u64.into()), 2);
     }
 
     #[test]
     fn test_empty() {
-        LogNormalModel::new(&ModelData::empty());
+        LogNormalModel::new(&RMITrainingData::<u64>::empty());
     }
 
 }

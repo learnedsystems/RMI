@@ -177,7 +177,7 @@ impl <K, T> Iterator for FixDupsIter<K, T> where
                             return Some(nxt);
                         }
                     }
-                    None => { self.last_item.take() }
+                    None => { None }
                 }
             }
         }
@@ -769,11 +769,14 @@ mod tests {
 
     #[test]
     fn test_scale() {
-        let mut v = ModelData::IntKeyToIntPos(vec![(0, 0), (1, 1), (3, 2), (100, 3)]);
+        let mut v: RMITrainingData<u64> =
+            RMITrainingData::new(Box::new(vec![(0, 0), (1, 1), (3, 2), (100, 3)]));
 
-        v.scale_targets_to(50, 4);
+        // `scale_targets_to(50, 4)` became `set_scale`: iterated offsets are multiplied
+        // by the scale factor (here 50/4 = 12.5).
+        v.set_scale(50.0 / 4.0);
 
-        let results = v.as_int_int();
+        let results: Vec<(u64, usize)> = v.iter().collect();
         assert_eq!(results[0].1, 0);
         assert_eq!(results[1].1, 12);
         assert_eq!(results[2].1, 25);
@@ -782,11 +785,11 @@ mod tests {
 
     #[test]
     fn test_iter() {
-        let data = vec![(0, 1), (1, 2), (3, 3), (100, 4)];
+        let data: Vec<(u64, usize)> = vec![(0, 1), (1, 2), (3, 3), (100, 4)];
 
-        let v = ModelData::IntKeyToIntPos(data.clone());
+        let v: RMITrainingData<u64> = RMITrainingData::new(Box::new(data.clone()));
 
-        let iterated: Vec<(u64, u64)> = v.iter_uint_uint().collect();
+        let iterated: Vec<(u64, usize)> = v.iter().collect();
         assert_eq!(data, iterated);
     }
 }

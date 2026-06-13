@@ -125,26 +125,27 @@ mod tests {
 
     #[test]
     fn test_linear1() {
-        let md = ModelData::IntKeyToIntPos(vec![(1, 2), (2, 3), (3, 4)]);
+        let md: RMITrainingData<u64> =
+            RMITrainingData::new(Box::new(vec![(1, 2), (2, 3), (3, 4)]));
 
         let lin_mod = LinearModel::new(&md);
 
-        assert_eq!(lin_mod.predict_to_int(1.into()), 2);
-        assert_eq!(lin_mod.predict_to_int(6.into()), 7);
+        assert_eq!(lin_mod.predict_to_int(&1u64.into()), 2);
+        assert_eq!(lin_mod.predict_to_int(&6u64.into()), 7);
     }
 
     #[test]
     fn test_linear_single() {
-        let md = ModelData::IntKeyToIntPos(vec![(1, 2)]);
+        let md: RMITrainingData<u64> = RMITrainingData::new(Box::new(vec![(1, 2)]));
 
         let lin_mod = LinearModel::new(&md);
 
-        assert_eq!(lin_mod.predict_to_int(1.into()), 2);
+        assert_eq!(lin_mod.predict_to_int(&1u64.into()), 2);
     }
 
     #[test]
     fn test_empty() {
-        LinearModel::new(&ModelData::empty());
+        LinearModel::new(&RMITrainingData::<u64>::empty());
     }
 
 }
@@ -215,17 +216,18 @@ mod loglin_tests {
 
     #[test]
     fn test_loglinear1() {
-        let md = ModelData::IntKeyToIntPos(vec![(2, 2), (3, 4), (4, 16)]);
+        let md: RMITrainingData<u64> =
+            RMITrainingData::new(Box::new(vec![(2, 2), (3, 4), (4, 16)]));
 
         let loglin_mod = LogLinearModel::new(&md);
 
-        assert_eq!(loglin_mod.predict_to_int(2.into()), 1);
-        assert_eq!(loglin_mod.predict_to_int(4.into()), 13);
+        assert_eq!(loglin_mod.predict_to_int(&2u64.into()), 1);
+        assert_eq!(loglin_mod.predict_to_int(&4u64.into()), 13);
     }
 
     #[test]
     fn test_empty() {
-        LogLinearModel::new(&ModelData::empty());
+        LogLinearModel::new(&RMITrainingData::<u64>::empty());
     }
 }
 

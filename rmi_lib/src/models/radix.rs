@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn test_empty() {
-        RadixModel::new(&ModelData::empty());
+        RadixModel::new(&RMITrainingData::<u64>::empty());
     }
 
 }
