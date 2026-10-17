@@ -29,6 +29,7 @@ pub struct TrainedRMI {
     pub models: String,
     pub branching_factor: u64,
     pub cache_fix: Option<(usize, Vec<(u64, usize)>)>,
+    pub range_check: Option<(ModelInput, ModelInput)>,
     pub build_time: u128
 }
 

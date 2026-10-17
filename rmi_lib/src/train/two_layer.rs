@@ -275,6 +275,9 @@ pub fn train_two_layer<T: TrainingKey>(md_container: &mut RMITrainingData<T>,
     // (The generated lookup takes 64-bit keys for 32-bit data too.)
     let min_key = md_container.get_key(0).to_model_input();
     let max_key = md_container.get_key(num_rows - 1).to_model_input();
+    let first_leaf = u64::min(num_leaf_models - 1, top_model.predict_to_int(&min_key));
+    let last_leaf = u64::min(num_leaf_models - 1, top_model.predict_to_int(&max_key));
+
     let mut outside_ranges = Vec::new();
     if min_key != min_key.min_value() {
         outside_ranges.push((min_key.min_value(), min_key.minus_epsilon(), 0));
@@ -283,31 +286,50 @@ pub fn train_two_layer<T: TrainingKey>(md_container: &mut RMITrainingData<T>,
         outside_ranges.push((max_key.plus_epsilon(), max_key.max_value(), num_rows as u64));
     }
 
-    for (lo, hi, lower_bound) in outside_ranges {
+    // If the top model can send these keys to leaf models in the middle of
+    // the data, covering them can make those errors very large (up to the
+    // number of keys), so check the key range in lookup instead.
+    let mut needs_range_check = false;
+    let mut outside_leaves = Vec::new();
+    for &(lo, hi, lower_bound) in outside_ranges.iter() {
         let mut reachable = vec![false ; num_leaf_models as usize];
         for (first, last) in top_model.prediction_ranges(&lo, &hi) {
             let first = u64::min(num_leaf_models - 1, first);
             let last = u64::min(num_leaf_models - 1, last);
+            if (lower_bound == 0 && last > first_leaf)
+                || (lower_bound != 0 && first < last_leaf) {
+                needs_range_check = true;
+            }
             for leaf_idx in first..=last {
                 reachable[leaf_idx as usize] = true;
             }
         }
-
-        for leaf_idx in 0..num_leaf_models as usize {
-            if !reachable[leaf_idx] { continue; }
-
-            let outside_err = leaf_models[leaf_idx].prediction_ranges(&lo, &hi)
-                .into_iter()
-                .map(|(p1, p2)| u64::max(
-                    error_between(p1, lower_bound, num_rows as u64),
-                    error_between(p2, lower_bound, num_rows as u64)))
-                .max().unwrap();
-
-            let (num_items_in_leaf, curr_err) = last_layer_max_l1s[leaf_idx];
-            last_layer_max_l1s[leaf_idx] = (num_items_in_leaf,
-                                            u64::max(curr_err, outside_err));
-        }
+        outside_leaves.push((lo, hi, lower_bound, reachable));
     }
+
+    let range_check = if needs_range_check {
+        trace!("Keys outside of the data range can reach the middle leaf models, \
+                adding a range check to lookup.");
+        Some((min_key, max_key))
+    } else {
+        for (lo, hi, lower_bound, reachable) in outside_leaves {
+            for leaf_idx in 0..num_leaf_models as usize {
+                if !reachable[leaf_idx] { continue; }
+
+                let outside_err = leaf_models[leaf_idx].prediction_ranges(&lo, &hi)
+                    .into_iter()
+                    .map(|(p1, p2)| u64::max(
+                        error_between(p1, lower_bound, num_rows as u64),
+                        error_between(p2, lower_bound, num_rows as u64)))
+                    .max().unwrap();
+
+                let (num_items_in_leaf, curr_err) = last_layer_max_l1s[leaf_idx];
+                last_layer_max_l1s[leaf_idx] = (num_items_in_leaf,
+                                                u64::max(curr_err, outside_err));
+            }
+        }
+        None
+    };
 
     trace!("Evaluating two-layer RMI...");
     let (m_idx, m_err) = last_layer_max_l1s
@@ -346,6 +368,7 @@ pub fn train_two_layer<T: TrainingKey>(md_container: &mut RMITrainingData<T>,
         models: format!("{},{}", layer1_model, layer2_model),
         branching_factor: num_leaf_models,
         cache_fix: None,
+        range_check,
         build_time: 0
     };
 
