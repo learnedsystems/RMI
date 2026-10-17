@@ -108,8 +108,12 @@ impl RadixTable {
             last_radix = current_radix;
         }
 
+        // keys after the last key go to the last leaf model: the leaf index
+        // is clamped to the number of leaf models. (The table size is not a
+        // safe marker: it is a valid index of a middle leaf when there are
+        // more leaf models than table entries.)
         for i in (last_radix as usize + 1)..hint_table.len() {
-            hint_table[i as usize] = hint_table.len() as u32; 
+            hint_table[i as usize] = std::u32::MAX;
         }
 
         return RadixTable {
