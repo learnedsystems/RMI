@@ -181,14 +181,77 @@ inline double cubic(double a, double b, double c, double d, double x) {
     fn function_name(&self) -> String {
         return String::from("cubic");
     }
-    fn needs_bounds_check(&self) -> bool {
-        return false;
-    }
 
     fn set_to_constant_model(&mut self, constant: u64) -> bool {
         self.params = (0.0, 0.0, 0.0, constant as f64);
         return true;
     }    
+
+    fn prediction_ranges(&self, lo: &ModelInput, hi: &ModelInput) -> Vec<(u64, u64)> {
+        let (a, b, c, d) = self.params;
+
+        // The cubic is only monotonic between the roots of its derivative,
+        // 3a x^2 + 2b x + c, so split [lo, hi] at the roots inside it.
+        let mut roots = Vec::new();
+        if a != 0.0 {
+            let disc = 4.0 * b * b - 12.0 * a * c;
+            if disc >= 0.0 {
+                let q = -0.5 * (2.0 * b + (2.0 * b).signum() * disc.sqrt());
+                if q != 0.0 {
+                    roots.push(q / (3.0 * a));
+                    roots.push(c / q);
+                } else {
+                    roots.push(0.0);
+                }
+            }
+        } else if b != 0.0 {
+            roots.push(-c / (2.0 * b));
+        }
+
+        let mut points = vec![*lo, *hi];
+        for r in roots {
+            if !(r > lo.as_float() && r < hi.as_float()) { continue; }
+            match lo {
+                ModelInput::Int(_) => {
+                    points.push((r.floor() as u64).into());
+                    points.push((r.ceil() as u64).into());
+                }
+                ModelInput::Float(_) => points.push(r.into())
+            }
+        }
+        points.sort_by(|p1, p2| p1.partial_cmp(p2).unwrap());
+
+        let mut ranges = Vec::new();
+        for w in points.windows(2) {
+            let f1 = self.predict_to_float(&w[0]);
+            let f2 = self.predict_to_float(&w[1]);
+
+            // Each of the three FMAs rounds once, so the computed value is
+            // within about 3 * 2^-53 * (|a| x^3 + |b| x^2 + |c| x + |d|) of
+            // the cubic. Widen the range by more than twice that (both ends
+            // can be off), plus one. This margin for rounding is an
+            // estimate (the roots above are rounded too), not proven to
+            // cover every case. With a = b = 0 only the last FMA rounds and
+            // the result is monotonic.
+            let x = f64::max(w[0].as_float().abs(), w[1].as_float().abs());
+            let largest = ((a.abs() * x + b.abs()) * x + c.abs()) * x + d.abs();
+            if !(f1.is_finite() && f2.is_finite() && largest.is_finite()) {
+                // no useful range: allow every output
+                return vec![(0, std::u64::MAX)];
+            }
+            let slack = if a == 0.0 && b == 0.0 {
+                0
+            } else {
+                ((8.0 * std::f64::EPSILON * largest).ceil() as u64).saturating_add(1)
+            };
+
+            let p1 = self.predict_to_int(&w[0]);
+            let p2 = self.predict_to_int(&w[1]);
+            ranges.push((u64::min(p1, p2).saturating_sub(slack),
+                         u64::max(p1, p2).saturating_add(slack)));
+        }
+        return ranges;
+    }
 }
 
 #[cfg(test)]

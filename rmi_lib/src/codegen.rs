@@ -372,6 +372,13 @@ macro_rules! model_index_from_output {
     };
 }
 
+fn key_literal(key: ModelInput) -> String {
+    return match key {
+        ModelInput::Int(x) => ModelParam::Int(x).c_val(),
+        ModelInput::Float(x) => ModelParam::Float(x).c_val()
+    };
+}
+
 pub fn rmi_size(rmi: &TrainedRMI) -> u64 {
     // compute the RMI size (used in the header, compute here before consuming)
     let mut num_total_bytes = 0;
@@ -649,6 +656,21 @@ inline size_t FCLAMP(double inp, double bound) {{
 
     for var in needed_vars {
         writeln!(code_output, "  {}", var)?;
+    }
+
+    if let Some((min_key, max_key)) = rmi.range_check {
+        // keys outside of the data range (see train_two_layer): the lower
+        // bound is 0 below the smallest key and num_rmi_rows above the
+        // largest one; the prediction stays clamped to num_rmi_rows - 1.
+        let (below, above) = if report_last_layer_errors {
+            (String::from("*err = 0; return 0;"),
+             format!("*err = 1; return {};", rmi.num_rmi_rows - 1))
+        } else {
+            (String::from("return 0;"),
+             format!("return {};", rmi.num_rmi_rows - 1))
+        };
+        writeln!(code_output, "  if (key < {}) {{ {} }}", key_literal(min_key), below)?;
+        writeln!(code_output, "  if (key > {}) {{ {} }}", key_literal(max_key), above)?;
     }
 
     let model_size_bytes = rmi_size(&rmi);

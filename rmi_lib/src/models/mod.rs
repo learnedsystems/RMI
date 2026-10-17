@@ -761,6 +761,19 @@ pub trait Model: Sync + Send {
     fn set_to_constant_model(&mut self, _constant: u64) -> bool {
         return false;
     }
+
+    // Returns ranges [low, high] that together contain predict_to_int(x)
+    // for every input x from lo to hi (both inclusive, lo <= hi). Used to
+    // find the leaf models that keys outside the training data can reach,
+    // and the predictions of those leaf models for such keys. The default
+    // assumes that the model is monotonic; models that are not must
+    // override it. (The cubic's ranges include a margin for floating-point
+    // rounding; that margin is an estimate, not proven to cover every case.)
+    fn prediction_ranges(&self, lo: &ModelInput, hi: &ModelInput) -> Vec<(u64, u64)> {
+        let p1 = self.predict_to_int(lo);
+        let p2 = self.predict_to_int(hi);
+        return vec![(u64::min(p1, p2), u64::max(p1, p2))];
+    }
 }
 
 #[cfg(test)]

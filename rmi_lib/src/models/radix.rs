@@ -78,6 +78,17 @@ inline uint64_t radix(uint64_t prefix_length, uint64_t bits, uint64_t inp) {
     fn restriction(&self) -> ModelRestriction {
         return ModelRestriction::MustBeTop;
     }
+
+    fn prediction_ranges(&self, lo: &ModelInput, hi: &ModelInput) -> Vec<(u64, u64)> {
+        let (prefix, num_bits) = self.params;
+
+        // the common prefix is shifted out, so the prediction is only
+        // monotonic for keys that share it
+        if prefix == 0 || lo.as_int() >> (64 - prefix) == hi.as_int() >> (64 - prefix) {
+            return vec![(self.predict_to_int(lo), self.predict_to_int(hi))];
+        }
+        return vec![(0, (1 << num_bits) - 1)];
+    }
 }
 
 pub struct RadixTable {
@@ -108,8 +119,12 @@ impl RadixTable {
             last_radix = current_radix;
         }
 
+        // keys after the last key go to the last leaf model: the leaf index
+        // is clamped to the number of leaf models. (The table size is not a
+        // safe marker: it is a valid index of a middle leaf when there are
+        // more leaf models than table entries.)
         for i in (last_radix as usize + 1)..hint_table.len() {
-            hint_table[i as usize] = hint_table.len() as u32; 
+            hint_table[i as usize] = std::u32::MAX;
         }
 
         return RadixTable {
@@ -161,11 +176,28 @@ inline uint64_t radix_table(const uint32_t* table, const uint64_t inp) {{
     fn function_name(&self) -> String {
         return String::from("radix_table");
     }
-    fn needs_bounds_check(&self) -> bool {
-        return false;
-    }
     fn restriction(&self) -> ModelRestriction {
         return ModelRestriction::None;
+    }
+
+    fn prediction_ranges(&self, lo: &ModelInput, hi: &ModelInput) -> Vec<(u64, u64)> {
+        let prefix = self.prefix_bits;
+
+        // the common prefix is masked off, so the prediction is only
+        // monotonic for keys that share it; other keys can reach any entry
+        if prefix == 0 || lo.as_int() >> (64 - prefix) == hi.as_int() >> (64 - prefix) {
+            return vec![(self.predict_to_int(lo), self.predict_to_int(hi))];
+        }
+
+        let mut ranges: Vec<(u64, u64)> = Vec::new();
+        for &v in self.hint_table.iter() {
+            let v = v as u64;
+            match ranges.last_mut() {
+                Some(last) if v <= last.1 + 1 => { last.1 = u64::max(last.1, v); }
+                _ => { ranges.push((v, v)); }
+            }
+        }
+        return ranges;
     }
 }
 

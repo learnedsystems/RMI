@@ -101,6 +101,12 @@ inline uint64_t ed_histogram(const uint64_t length,
     fn function_name(&self) -> String { return String::from("ed_histogram"); }
     fn restriction(&self) -> ModelRestriction { return ModelRestriction::MustBeTop; }
     fn needs_bounds_check(&self) -> bool { return false; }
+
+    // keys below the first pivot do not map to a valid bin, so make no
+    // assumption about where keys outside of the data go
+    fn prediction_ranges(&self, _lo: &ModelInput, _hi: &ModelInput) -> Vec<(u64, u64)> {
+        return vec![(0, std::u64::MAX)];
+    }
 }
 
 #[cfg(test)]
