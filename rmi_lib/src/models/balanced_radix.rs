@@ -167,6 +167,17 @@ inline uint64_t bradix_clamp_low(uint64_t prefix_length,
     fn restriction(&self) -> ModelRestriction {
         return ModelRestriction::MustBeTop;
     }
+
+    fn prediction_ranges(&self, lo: &ModelInput, hi: &ModelInput) -> Vec<(u64, u64)> {
+        let (prefix, num_bits, _clamp) = self.params;
+
+        // the common prefix is shifted out, so the prediction is only
+        // monotonic for keys that share it
+        if prefix == 0 || lo.as_int() >> (64 - prefix) == hi.as_int() >> (64 - prefix) {
+            return vec![(self.predict_to_int(lo), self.predict_to_int(hi))];
+        }
+        return vec![(0, (1 << num_bits) - 1)];
+    }
 }
 
 #[cfg(test)]

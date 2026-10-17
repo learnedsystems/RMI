@@ -266,6 +266,49 @@ pub fn train_two_layer<T: TrainingKey>(md_container: &mut RMITrainingData<T>,
               num_leaf_models, large_corrections);
     }
                         
+    trace!("Covering keys outside of the data range...");
+    // The lower bound of a key below the smallest key is 0, and the lower
+    // bound of a key above the largest key is num_rows. The top model sends
+    // such keys to some leaf model (not necessarily the first or the last
+    // one: a cubic can turn around, and radix models ignore the common
+    // prefix), so every leaf model that they can reach must cover them.
+    // (The generated lookup takes 64-bit keys for 32-bit data too.)
+    let min_key = md_container.get_key(0).to_model_input();
+    let max_key = md_container.get_key(num_rows - 1).to_model_input();
+    let mut outside_ranges = Vec::new();
+    if min_key != min_key.min_value() {
+        outside_ranges.push((min_key.min_value(), min_key.minus_epsilon(), 0));
+    }
+    if max_key != max_key.max_value() {
+        outside_ranges.push((max_key.plus_epsilon(), max_key.max_value(), num_rows as u64));
+    }
+
+    for (lo, hi, lower_bound) in outside_ranges {
+        let mut reachable = vec![false ; num_leaf_models as usize];
+        for (first, last) in top_model.prediction_ranges(&lo, &hi) {
+            let first = u64::min(num_leaf_models - 1, first);
+            let last = u64::min(num_leaf_models - 1, last);
+            for leaf_idx in first..=last {
+                reachable[leaf_idx as usize] = true;
+            }
+        }
+
+        for leaf_idx in 0..num_leaf_models as usize {
+            if !reachable[leaf_idx] { continue; }
+
+            let outside_err = leaf_models[leaf_idx].prediction_ranges(&lo, &hi)
+                .into_iter()
+                .map(|(p1, p2)| u64::max(
+                    error_between(p1, lower_bound, num_rows as u64),
+                    error_between(p2, lower_bound, num_rows as u64)))
+                .max().unwrap();
+
+            let (num_items_in_leaf, curr_err) = last_layer_max_l1s[leaf_idx];
+            last_layer_max_l1s[leaf_idx] = (num_items_in_leaf,
+                                            u64::max(curr_err, outside_err));
+        }
+    }
+
     trace!("Evaluating two-layer RMI...");
     let (m_idx, m_err) = last_layer_max_l1s
         .iter().enumerate()
