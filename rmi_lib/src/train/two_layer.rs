@@ -11,10 +11,13 @@ use crate::train::{validate, train_model, TrainedRMI};
 use crate::train::lower_bound_correction::LowerBoundCorrection;
 use log::*;
 
-fn error_between(v1: u64, v2: u64, max_pred: u64) -> u64 {
-    let pred1 = u64::min(v1, max_pred);
-    let pred2 = u64::min(v2, max_pred);
-    return u64::max(pred1, pred2) - u64::min(pred1, pred2);
+// The generated code clamps the prediction to num_keys - 1, while the
+// lower bound of a key can be anything from 0 to num_keys (for keys above
+// the largest key).
+fn error_between(pred: u64, target: u64, num_keys: u64) -> u64 {
+    let pred = u64::min(pred, num_keys - 1);
+    let target = u64::min(target, num_keys);
+    return u64::max(pred, target) - u64::min(pred, target);
 }
 
 fn build_models_from<T: TrainingKey>(data: &RMITrainingData<T>,
