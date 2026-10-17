@@ -186,7 +186,7 @@ pub fn train_two_layer<T: TrainingKey>(md_container: &mut RMITrainingData<T>,
     // replace any empty model with a model that returns the correct constant
     // (for LB predictions), if the underlying model supports it.
     let mut could_not_replace = false;
-    for idx in 0..(num_leaf_models as usize)-1 {
+    for idx in 0..num_leaf_models as usize {
         assert_eq!(lb_corrections.first_key(idx).is_none(),
                    lb_corrections.last_key(idx).is_none());
 
