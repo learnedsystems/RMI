@@ -161,9 +161,6 @@ inline uint64_t radix_table(const uint32_t* table, const uint64_t inp) {{
     fn function_name(&self) -> String {
         return String::from("radix_table");
     }
-    fn needs_bounds_check(&self) -> bool {
-        return false;
-    }
     fn restriction(&self) -> ModelRestriction {
         return ModelRestriction::None;
     }

@@ -181,9 +181,6 @@ inline double cubic(double a, double b, double c, double d, double x) {
     fn function_name(&self) -> String {
         return String::from("cubic");
     }
-    fn needs_bounds_check(&self) -> bool {
-        return false;
-    }
 
     fn set_to_constant_model(&mut self, constant: u64) -> bool {
         self.params = (0.0, 0.0, 0.0, constant as f64);
